@@ -64,20 +64,41 @@ function cardDef(id){ return CARD_DEFS[id]; }
 function uniq(){ return Math.random().toString(36).slice(2,9); }
 // 演出用のCPU「間」。ヘッドレステスト（__TEST_FORCE_CPU）実行時のみ短縮する。
 function pace(ms){ return (typeof window!=='undefined' && window.__TEST_FORCE_CPU) ? Math.min(10, ms) : ms; }
+// CPUの思考待ち時間。難易度ごとの倍率をかけた上でpace()に通す。
+function cpuPace(ms){
+  const diff = (typeof Game!=='undefined' && Game.difficulty && DIFFICULTY_DEFS[Game.difficulty]) ? DIFFICULTY_DEFS[Game.difficulty] : DIFFICULTY_DEFS.courtier;
+  return pace(ms * diff.speedMul);
+}
+
+/* ---------------------------------------------------------------------
+ * 2b. 難易度定義
+ * ------------------------------------------------------------------- */
+const DIFFICULTY_DEFS = {
+  novice:   { id:'novice',   label:'新米仮面卿',   epithet:'駆け引きに不慣れで、隙が多い。',           speedMul:1.3 },
+  courtier: { id:'courtier', label:'仮面卿',       epithet:'標準的な駆け引きをこなす、舞踏会の顔。',     speedMul:1.0 },
+  wily:     { id:'wily',     label:'老獪な仮面卿', epithet:'記憶力と読みに長け、手強い相手。',           speedMul:0.78 },
+};
+const DIFFICULTY_ORDER = ['novice','courtier','wily'];
 
 /* ---------------------------------------------------------------------
  * 3. ゲーム状態 & コアロジック
  * ------------------------------------------------------------------- */
 const Game = {
   state: null,
+  difficulty: 'courtier',
+
+  setDifficulty(id){
+    if(DIFFICULTY_DEFS[id]) this.difficulty = id;
+  },
 
   newGame(){
     const deck = buildFreshDeck();
     const removedCard = deck.pop(); // 転生札（誰にも見えない1枚、裏向きで除外）
     const forceCPU = (typeof window!=='undefined' && window.__TEST_FORCE_CPU); // ヘッドレステスト専用フック
+    const diff = DIFFICULTY_DEFS[this.difficulty] || DIFFICULTY_DEFS.courtier;
     const players = [
       { id:0, name:'あなた', isCPU: !!forceCPU, hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
-      { id:1, name:'仮面卿', isCPU:true,  hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
+      { id:1, name:diff.label, isCPU:true,  hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
     ];
     this.state = {
       deck, removedCard,
@@ -129,7 +150,7 @@ const Game = {
     UI.render();
 
     if(p.isCPU){
-      setTimeout(()=>CPU.takeTurn(), pace(850));
+      setTimeout(()=>CPU.takeTurn(), cpuPace(1500));
     }
   },
 
@@ -199,10 +220,16 @@ const Game = {
     const targetCard = target.hand[0];
     const hit = cardDef(targetCard).number === guessNumber;
     this.addLog(`${actor.name}は「${target.name}の手札は${guessNumber}」と宣言した…${hit?'的中！':'外れ。'}`);
-    if(hit){
-      this.eliminate(t, `${actor.name}の宣言が的中し、正体が見破られた`);
-    }
-    this.finishResolve();
+
+    const resultHtml = hit
+      ? `${actor.name}は${target.name}の手札を「${guessNumber}」と見抜いた！<br><br>${UI.cardInline(targetCard)}<br><br><b style="color:var(--gold-light)">${target.name}は正体を見破られ、退場する。</b>`
+      : `${actor.name}は${target.name}の手札を「${guessNumber}」と宣言したが、<b>外れた</b>。<br>${target.name}の正体はまだ分からない。`;
+
+    const applyResult = () => {
+      if(hit){ this.eliminate(t, `${actor.name}の宣言が的中し、正体が見破られた`); }
+      this.finishResolve();
+    };
+    UI.showInfoModal('給仕の宣言', resultHtml, applyResult, true);
   },
 
   effMutualReveal(actorIdx){
@@ -269,8 +296,15 @@ const Game = {
           {label:'底へ送る', action:()=>{ s.deck.pop(); s.deck.unshift(top); this.addLog(`${actor.name}は見た仮面を山札の底へ送った。`); this.finishResolve(); }},
         ]);
     } else {
-      // CPUはランダム（記憶しない簡易AI）
-      if(Math.random()<0.5){ s.deck.pop(); s.deck.unshift(top); this.addLog(`${actor.name}は見た仮面を山札の底へ送ったようだ。`); }
+      // CPUの選択（老獪な仮面卿は次に引くのが相手であることを踏まえて判断する）
+      const topNum = cardDef(top).number;
+      let sendToBottom;
+      if(Game.difficulty==='wily'){
+        sendToBottom = topNum >= 6; // 価値の高い仮面は相手に渡さない
+      } else {
+        sendToBottom = Math.random() < 0.5;
+      }
+      if(sendToBottom){ s.deck.pop(); s.deck.unshift(top); this.addLog(`${actor.name}は見た仮面を山札の底へ送ったようだ。`); }
       else { this.addLog(`${actor.name}は山札をそのままにしたようだ。`); }
       this.finishResolve();
     }
@@ -291,6 +325,7 @@ const Game = {
     actor.hand[0] = tCard;
     target.hand[0] = aCard;
     this.addLog(`${actor.name}は${target.name}と強制的に仮面を交換させた。`);
+    if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`🎭 ${actor.name}と${target.name}の仮面が入れ替わった`, 'info'); }
     this.finishResolve();
   },
 
@@ -314,8 +349,10 @@ const Game = {
     if(newCard){
       target.hand.push(newCard);
       this.addLog(`${target.name}は山札から新しい仮面を引いた。`);
+      if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`🍷 ${target.name}は「${cardDef(oldCard).name}」を公開で捨て、新しい仮面を引いた`, 'info'); }
     } else {
       this.addLog(`${target.name}に配る仮面が残っていなかった。`);
+      if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`🍷 ${target.name}は「${cardDef(oldCard).name}」を公開で捨てた（山札は空）`, 'info'); }
     }
     this.finishResolve();
   },
@@ -331,19 +368,28 @@ const Game = {
       return;
     }
     const aCard = actor.hand[0], tCard = target.hand[0];
-    const reveal = () => {
-      const aDef = cardDef(aCard), tDef = cardDef(tCard);
-      this.addLog(`${actor.name}と${target.name}は仮面の数字を見せ合った。（${actor.name}:${aDef.name} / ${target.name}:${tDef.name}）`);
-      // LARVAの黄金律：比べ合いによる公開だけでは脱落しない。数字の大小のみで決着する
-      if(aDef.number < tDef.number){ this.eliminate(actorIdx, `${target.name}との対決に敗れた`); }
-      else if(tDef.number < aDef.number){ this.eliminate(t, `${actor.name}との対決に敗れた`); }
-      else { this.addLog('数字は同じだった。両者、決着つかず。'); }
+    const aDef = cardDef(aCard), tDef = cardDef(tCard);
+    this.addLog(`${actor.name}と${target.name}は仮面の数字を見せ合った。（${actor.name}:${aDef.name} / ${target.name}:${tDef.name}）`);
+
+    // LARVAの黄金律：比べ合いによる公開だけでは脱落しない。数字の大小のみで決着する
+    let loserIdx = null, outcomeText;
+    if(aDef.number < tDef.number){ loserIdx = actorIdx; outcomeText = `<b style="color:var(--gold-light)">${target.name}の勝ち。</b>${actor.name}は数字で及ばず、正体が露見する。`; }
+    else if(tDef.number < aDef.number){ loserIdx = t; outcomeText = `<b style="color:var(--gold-light)">${actor.name}の勝ち。</b>${target.name}は数字で及ばず、正体が露見する。`; }
+    else { outcomeText = '数字は同じ。両者、決着つかず。'; }
+
+    const applyResult = () => {
+      if(loserIdx!==null){
+        this.eliminate(loserIdx, loserIdx===actorIdx ? `${target.name}との対決に敗れた` : `${actor.name}との対決に敗れた`);
+      } else {
+        this.addLog('数字は同じだった。両者、決着つかず。');
+      }
       this.finishResolve();
     };
-    if(!actor.isCPU){
-      UI.showInfoModal('黒騎士の対決', `${actor.name}: ${UI.cardInline(aCard)}<br><br>${target.name}: ${UI.cardInline(tCard)}`, reveal, true);
+    const modalHtml = `${actor.name}: ${UI.cardInline(aCard)}<br><br>${target.name}: ${UI.cardInline(tCard)}<br><br>${outcomeText}`;
+    if(actor.isCPU && target.isCPU){
+      applyResult();
     } else {
-      reveal();
+      UI.showInfoModal('黒騎士の対決', modalHtml, applyResult, true);
     }
   },
 
@@ -369,6 +415,7 @@ const Game = {
     }
     this.addLog(`💀 ${p.name} は退場した。（${reason}）`);
     if(typeof UI!=='undefined' && UI.flashEliminated){ UI.flashEliminated(playerIdx); }
+    if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`💀 ${p.name}が退場（${reason}）`, 'danger', 2600); }
   },
 
   checkGameEnd(){
@@ -413,7 +460,8 @@ const Game = {
     if(!s || s.gameOver) return;
     s.turnIndex = this.other(s.turnIndex);
     s.phase = 'idle';
-    setTimeout(()=>this.startTurn(), pace(s.players[s.turnIndex].isCPU ? 550 : 300));
+    const nextIsCPU = s.players[s.turnIndex].isCPU;
+    setTimeout(()=>this.startTurn(), nextIsCPU ? cpuPace(900) : pace(350));
   },
 };
 
@@ -430,16 +478,33 @@ const CPU = {
     const p = s.players[idx];
     if(!p.isCPU || s.phase!=='choose') return;
 
+    const diffId = Game.difficulty || 'courtier';
     const hand = p.hand.slice();
     let chosen;
     // 「仮面の主催者」は絶対に自分からは出さない（もう1枚がある限り）
     if(hand.includes('masked_host') && hand.length===2){
       chosen = hand.find(c=>c!=='masked_host');
+    } else if(diffId==='novice'){
+      // 新米：ほとんど考えずランダムに選ぶ
+      chosen = hand[Math.floor(Math.random()*hand.length)];
     } else {
-      // 単純なスコアリング：数字が低いほど積極的に切る／高いほど温存しがち、加えて少し乱数
-      const scored = hand.map(c=>{
-        const n = cardDef(c).number;
-        return { c, score: (10-n) + Math.random()*4 };
+      const t = Game.other(idx);
+      const scored = hand.map((c,i)=>{
+        const d = cardDef(c);
+        const n = d.number;
+        const otherCard = hand[1-i];
+        let score = (10-n) + Math.random() * (diffId==='wily' ? 2 : 4);
+        if(diffId==='wily' && otherCard){
+          // 老獪：もう1枚の状況を踏まえて有利な効果を優先する
+          const otherNum = cardDef(otherCard).number;
+          if(d.effect==='guessRank' && CPU.memory[t]) score += 5;
+          if(d.effect==='compareHand'){
+            if(otherNum>=6) score += 4;
+            else if(otherNum<=3) score -= 3;
+          }
+          if(d.effect==='protectSelf' && (otherCard==='grand_duke' || otherCard==='masked_host')) score += 4;
+        }
+        return { c, score };
       });
       scored.sort((a,b)=>b.score-a.score);
       chosen = scored[0].c;
@@ -454,11 +519,16 @@ const CPU = {
       if(Game.state.pendingCard === chosen && Game.state.phase==='resolve'){
         this.resolvePending(idx, chosen);
       }
-    }, pace(650));
+    }, cpuPace(1100));
   },
 
   guessWeightedNumber(actorIdx){
     const s = Game.state;
+    const diffId = Game.difficulty || 'courtier';
+    if(diffId==='novice'){
+      // 新米：情報を活かさずほぼランダムに宣言する
+      return 2 + Math.floor(Math.random()*9);
+    }
     const remaining = {}; // number -> 残数
     CARD_ORDER.forEach(id=>{
       const d = cardDef(id);
@@ -507,11 +577,32 @@ const CPU = {
  * 5. UI 描画
  * ------------------------------------------------------------------- */
 const UI = {
+  selectedCardId: null,
+
   init(){
     this.buildRulesPanel();
     this.buildSparkles();
     this.buildCandleGlow();
     this.bindRippleEffect();
+    this.buildDifficultyPicker();
+  },
+
+  buildDifficultyPicker(){
+    const row = document.getElementById('difficulty-row');
+    const epithetEl = document.getElementById('difficulty-epithet');
+    if(!row) return;
+    row.innerHTML = DIFFICULTY_ORDER.map(id=>{
+      const d = DIFFICULTY_DEFS[id];
+      return `<button class="diff-btn${id===Game.difficulty?' active':''}" data-diff="${id}" onclick="UI.selectDifficulty('${id}')">${d.label}</button>`;
+    }).join('');
+    if(epithetEl) epithetEl.textContent = DIFFICULTY_DEFS[Game.difficulty].epithet;
+  },
+
+  selectDifficulty(id){
+    Game.setDifficulty(id);
+    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.toggle('active', b.dataset.diff===id));
+    const epithetEl = document.getElementById('difficulty-epithet');
+    if(epithetEl) epithetEl.textContent = DIFFICULTY_DEFS[id].epithet;
   },
 
   buildCandleGlow(){
@@ -549,9 +640,7 @@ const UI = {
     layer.innerHTML = html;
   },
 
-  buildRulesPanel(){
-    const panel = document.getElementById('rules-panel');
-    if(!panel) return;
+  rulesHtml(){
     let rows = '';
     CARD_ORDER.forEach(id=>{
       const d = cardDef(id);
@@ -564,7 +653,7 @@ const UI = {
         <div class="rule-count">×${d.count}</div>
       </div>`;
     });
-    panel.innerHTML = `<h3>仮面一覧（全18枚）</h3>${rows}
+    return `${rows}
       <div class="rd" style="margin:14px 0 6px; opacity:.85;">
         数字が小さいほど「攻めの読み合い」向き。数字が大きいほど希少で、抱え続ける価値と危険の両方を持つ切り札です。
       </div>
@@ -574,6 +663,29 @@ const UI = {
       <div class="rd" style="margin:10px 0 6px; opacity:.85;">
         カードの情報を探るため、対戦相手への簡単な質問も自由です。より高度な心理戦をお楽しみください。
       </div>`;
+  },
+
+  buildRulesPanel(){
+    const panel = document.getElementById('rules-panel');
+    if(!panel) return;
+    panel.innerHTML = `<h3>仮面一覧（全18枚）</h3>${this.rulesHtml()}`;
+  },
+
+  showHelpModal(){
+    const overlay = document.getElementById('help-overlay');
+    const box = document.getElementById('help-box');
+    if(!overlay || !box) return;
+    box.innerHTML = `
+      <button class="help-close" onclick="UI.closeHelpModal()" aria-label="閉じる">×</button>
+      <h3>仮面一覧とルール</h3>
+      ${this.rulesHtml()}
+    `;
+    overlay.classList.add('open');
+  },
+
+  closeHelpModal(){
+    const overlay = document.getElementById('help-overlay');
+    if(overlay) overlay.classList.remove('open');
   },
 
   toggleRules(){
@@ -628,10 +740,11 @@ const UI = {
     const me = Game.me(), opp = Game.opp();
 
     document.getElementById('turn-badge').textContent =
-      s.gameOver ? '舞踏会、終幕' : (s.players[s.turnIndex].isCPU ? '仮面卿の番' : 'あなたの番');
+      s.gameOver ? '舞踏会、終幕' : `${s.players[s.turnIndex].name}の番`;
     document.getElementById('deck-count-text').textContent = `山札 ${s.deck.length}枚`;
 
     // 相手
+    document.getElementById('opp-name').textContent = opp.name;
     document.getElementById('opp-protect').classList.toggle('show', opp.protectedFlag);
     document.getElementById('opp-eliminated').classList.toggle('show', !opp.alive);
     const oppThinking = !s.gameOver && s.turnIndex===1 && (s.phase==='choose' || s.phase==='resolve');
@@ -642,9 +755,12 @@ const UI = {
     // 自分
     document.getElementById('me-protect').classList.toggle('show', me.protectedFlag);
     document.getElementById('me-eliminated').classList.toggle('show', !me.alive);
+    const meCanChoose = !s.gameOver && s.phase==='choose' && s.turnIndex===0;
+    if(!meCanChoose) this.selectedCardId = null; // 自分の選択フェーズ以外では選択状態を破棄
     document.getElementById('me-hand').innerHTML = me.hand.map((cid,i)=>this.renderCard(cid,{
-      selectable: !s.gameOver && s.phase==='choose' && s.turnIndex===0,
-      onclick: `UI.onMeChooseCard('${cid}')`,
+      selectable: meCanChoose,
+      chosen: cid===this.selectedCardId,
+      onclick: `UI.onMeSelectCard('${cid}')`,
     })).join('');
     document.getElementById('me-discard').innerHTML = this.renderDiscardChips(me.discard);
 
@@ -657,6 +773,7 @@ const UI = {
     const d = cardDef(cid);
     const cls = ['card', rankClass(d.number)];
     if(opts.selectable) cls.push('selectable');
+    if(opts.chosen) cls.push('chosen');
     return `<div class="${cls.join(' ')}" data-cid="${cid}" ${opts.selectable?`onclick="${opts.onclick}"`:''} title="${d.name}（${d.number}）">
       <img src="${d.image}" alt="${d.name}（${d.number}）">
     </div>`;
@@ -698,11 +815,11 @@ const UI = {
       const d = cardDef(cid);
       const actorIsMe = s.turnIndex===0;
       if(!actorIsMe){
-        box.innerHTML = `仮面卿が「${d.name}」の力を発動している…`;
+        box.innerHTML = `${Game.opp().name}が「${d.name}」の力を発動している…`;
         return;
       }
       if(d.effect==='guessRank'){
-        box.innerHTML = `「${d.name}」発動：仮面卿の手札の数字を宣言してください（1は宣言できません）`;
+        box.innerHTML = `「${d.name}」発動：${Game.opp().name}の手札の数字を宣言してください（1は宣言できません）`;
         const pad = document.createElement('div');
         pad.className = 'num-pad';
         for(let n=2;n<=10;n++){
@@ -715,7 +832,7 @@ const UI = {
         return;
       }
       if(['mutualReveal','peekHand','protectSelf','swapHand','forceRedraw','compareHand'].includes(d.effect)){
-        box.innerHTML = `「${d.name}」の力を仮面卿に対して発動します。`;
+        box.innerHTML = `「${d.name}」の力を${Game.opp().name}に対して発動します。`;
         const row = document.createElement('div');
         row.className='choice-row';
         const b = document.createElement('button');
@@ -741,9 +858,24 @@ const UI = {
 
     if(s.phase==='choose'){
       if(s.turnIndex===0){
-        box.innerHTML = 'どちらの仮面を場に出しますか？（手札から1枚を選択）';
+        if(this.selectedCardId){
+          const d = cardDef(this.selectedCardId);
+          box.innerHTML = `「${d.name}（${d.number}）」を場に出しますか？<br><span class="sub-desc">${d.desc}</span>`;
+          const row = document.createElement('div');
+          row.className = 'choice-row';
+          const okBtn = document.createElement('button');
+          okBtn.className = 'btn primary'; okBtn.textContent = 'この仮面を場に出す';
+          okBtn.onclick = () => this.confirmPlaySelected();
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'btn ghost'; cancelBtn.textContent = 'やめる';
+          cancelBtn.onclick = () => this.cancelSelection();
+          row.appendChild(okBtn); row.appendChild(cancelBtn);
+          panel.appendChild(row);
+        } else {
+          box.innerHTML = 'どちらの仮面を場に出しますか？（手札から1枚を選んでください）';
+        }
       } else {
-        box.innerHTML = '仮面卿が思案している…';
+        box.innerHTML = `${Game.opp().name}が思案している…`;
       }
       return;
     }
@@ -751,13 +883,28 @@ const UI = {
     box.innerHTML = '―';
   },
 
-  onMeChooseCard(cid){
+  onMeSelectCard(cid){
     const s = Game.state;
-    if(s.phase!=='choose' || s.turnIndex!==0) return;
+    if(!s || s.phase!=='choose' || s.turnIndex!==0) return;
+    this.selectedCardId = (this.selectedCardId===cid) ? null : cid;
+    this.render();
+  },
+
+  cancelSelection(){
+    this.selectedCardId = null;
+    this.render();
+  },
+
+  confirmPlaySelected(){
+    const cid = this.selectedCardId;
+    if(!cid) return;
+    const s = Game.state;
+    if(!s || s.phase!=='choose' || s.turnIndex!==0) return;
+    this.selectedCardId = null;
     const el = document.querySelector(`#me-hand .card[data-cid="${cid}"]`);
     if(el && !this.reducedMotion()){
       // 選択不可にして二重クリックを防ぐ
-      document.querySelectorAll('#me-hand .card.selectable').forEach(c=>c.classList.remove('selectable'));
+      document.querySelectorAll('#me-hand .card.selectable').forEach(c=>{ c.classList.remove('selectable'); c.onclick=null; });
       this.flyCardToDiscard(el, 'me-discard');
       setTimeout(()=>Game.discardCard(0, cid), 380);
     } else {
@@ -785,7 +932,8 @@ const UI = {
     document.body.appendChild(clone);
     el.style.visibility = 'hidden';
 
-    requestAnimationFrame(()=>{
+    const raf = (typeof window!=='undefined' && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (fn)=>setTimeout(fn, 16);
+    raf(()=>{
       const dx = (trect.left + Math.min(trect.width,40)/2) - (rect.left + rect.width/2);
       const dy = (trect.top + trect.height/2) - (rect.top + rect.height/2);
       clone.style.transform = `translate(${dx}px, ${dy}px) rotate(340deg) scale(0.45)`;
@@ -801,6 +949,21 @@ const UI = {
     el.textContent = text;
     document.body.appendChild(el);
     setTimeout(()=>el.remove(), 1750);
+  },
+
+  showToast(text, kind, duration){
+    kind = kind || 'info';
+    duration = duration || 2200;
+    const el = document.createElement('div');
+    el.className = `turn-banner toast ${kind}`;
+    el.textContent = text;
+    document.body.appendChild(el);
+    if(this.reducedMotion()){
+      el.style.animation = 'none';
+      el.style.opacity = '1';
+      el.style.transform = 'translate(-50%,0)';
+    }
+    setTimeout(()=>el.remove(), duration);
   },
 
   flashEliminated(playerIdx){
@@ -866,7 +1029,7 @@ const UI = {
     const box = document.getElementById('gameover-box');
     let title, sub, palette;
     if(s.winner && s.winner.id===0){ title='あなたの勝利'; sub='正体を隠し通し、王位を継承した。'; palette=['var(--gold-light)','var(--gold)','var(--royal)']; }
-    else if(s.winner && s.winner.id===1){ title='仮面卿の勝利'; sub='あなたの正体は見破られてしまった。'; palette=['var(--velvet-light)','var(--danger)','var(--gold-dim)']; }
+    else if(s.winner && s.winner.id===1){ title=`${s.players[1].name}の勝利`; sub='あなたの正体は見破られてしまった。'; palette=['var(--velvet-light)','var(--danger)','var(--gold-dim)']; }
     else { title='引き分け'; sub='舞踏会は決着つかず幕を閉じた。'; palette=['var(--silver)','var(--ivory-dim)','var(--gold-dim)']; }
 
     const revealRow = s.players.map(p=>{
@@ -907,5 +1070,5 @@ if('serviceWorker' in navigator){
 
 /* テスト用フック（jsdomヘッドレステストから利用。通常のプレイには使用しない） */
 if(typeof window!=='undefined'){
-  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS };
+  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS };
 }

@@ -163,6 +163,21 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 @keyframes grandGlow{ 0%,100%{ box-shadow:0 6px 22px rgba(201,162,39,0.35), inset 0 1px 0 rgba(255,255,255,0.5); } 50%{ box-shadow:0 6px 30px rgba(201,162,39,0.6), inset 0 1px 0 rgba(255,255,255,0.6); } }
 @media (prefers-reduced-motion: reduce){ .btn-grand{ animation:none; } .btn-grand::after{ display:none; } }
 
+.difficulty-wrap{ text-align:center; margin:22px 0 14px; }
+.difficulty-label{ font-size:11px; letter-spacing:.18em; color:var(--gold-dim); margin-bottom:10px; font-family:'Shippori Mincho',serif; }
+.difficulty-row{ display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+.diff-btn{
+  font-family:'Zen Maru Gothic',sans-serif; font-size:12.5px; letter-spacing:.03em;
+  background:rgba(255,255,255,0.05); color:var(--ivory-dim); border:1px solid rgba(201,162,39,0.3);
+  padding:8px 16px; border-radius:999px; cursor:pointer; transition:all .18s ease;
+}
+.diff-btn:hover{ background:rgba(201,162,39,0.14); color:var(--ivory); }
+.diff-btn.active{
+  background:linear-gradient(180deg, var(--gold-light), var(--gold) 75%); color:var(--ink); font-weight:700; border-color:transparent;
+  box-shadow:0 4px 14px rgba(201,162,39,0.35);
+}
+.difficulty-epithet{ font-size:11.5px; color:var(--ivory-dim); margin-top:10px; min-height:1.4em; font-style:italic; }
+
 /* ---------- table ---------- */
 #table{ display:none; }
 #table.open{
@@ -297,6 +312,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   padding:12px; margin-top:4px; text-align:center;
 }
 #action-panel .prompt{ font-family:'Shippori Mincho',serif; font-size:13.5px; color:var(--ivory); margin-bottom:10px; line-height:1.6; }
+#action-panel .sub-desc{ display:block; font-family:'Zen Maru Gothic',sans-serif; font-size:11.5px; color:var(--ivory-dim); margin-top:4px; line-height:1.6; }
 #action-panel .sub{ font-size:11.5px; color:var(--ivory-dim); margin-top:-6px; margin-bottom:12px; }
 .choice-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
 .btn{
@@ -358,6 +374,24 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   100%{ opacity:0; transform:translate(-50%,-10px) scale(.96); }
 }
 @media (prefers-reduced-motion: reduce){ .turn-banner{ animation:none; opacity:1; transform:translate(-50%,0); } }
+
+.turn-banner.toast{
+  top:auto; bottom:14%; max-width:88vw; text-align:center; font-size:13px; letter-spacing:.06em;
+  padding:9px 20px; animation:toastPop 2.2s cubic-bezier(.22,1,.36,1) forwards;
+}
+.turn-banner.toast.info{
+  background:linear-gradient(135deg, rgba(239,231,210,0.97), rgba(195,185,164,0.97)); color:var(--ink);
+}
+.turn-banner.toast.danger{
+  background:linear-gradient(135deg, rgba(168,50,74,0.97), rgba(110,20,35,0.97)); color:var(--ivory);
+}
+@keyframes toastPop{
+  0%{ opacity:0; transform:translate(-50%,10px) scale(.92); }
+  12%{ opacity:1; transform:translate(-50%,0) scale(1); }
+  82%{ opacity:1; transform:translate(-50%,0) scale(1); }
+  100%{ opacity:0; transform:translate(-50%,6px) scale(.97); }
+}
+@media (prefers-reduced-motion: reduce){ .turn-banner.toast{ animation:none; } }
 .modal-overlay{ position:fixed; inset:0; background:rgba(5,4,10,0.72); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
 .modal-overlay.open{ display:flex; }
 .modal-box{
@@ -381,6 +415,17 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 }
 @keyframes burstOut{ to{ transform:translate(var(--tx), var(--ty)) scale(0); opacity:0; } }
 @media (prefers-reduced-motion: reduce){ .burst-particle{ display:none; } }
+
+/* ---------- help modal ---------- */
+.help-box{
+  max-width:600px; max-height:82vh; overflow-y:auto; text-align:left; padding-top:40px;
+}
+.help-box h3{ font-family:'Shippori Mincho',serif; color:var(--gold-light); font-size:16px; margin:0 0 10px; letter-spacing:.05em; text-align:center; }
+.help-close{
+  position:absolute; top:12px; right:14px; background:none; border:none; color:var(--ivory-dim);
+  font-size:20px; line-height:1; cursor:pointer; padding:4px 8px; border-radius:8px;
+}
+.help-close:hover{ color:var(--ivory); background:rgba(255,255,255,0.08); }
 
 /* ---------- game over ---------- */
 #gameover-overlay .modal-box{ max-width:400px; }
@@ -428,6 +473,13 @@ body.table-mode footer.credits{ display:none; }
       <button class="link-btn" id="rules-toggle-btn" onclick="UI.toggleRules()">▾ 仮面の一覧とルールを見る</button>
     </div>
     <div id="rules-panel"></div>
+
+    <div class="difficulty-wrap">
+      <div class="difficulty-label">対戦相手の格</div>
+      <div class="difficulty-row" id="difficulty-row"></div>
+      <div class="difficulty-epithet" id="difficulty-epithet"></div>
+    </div>
+
     <div class="start-actions">
       <button class="btn-grand" onclick="Game.newGame()">舞踏会をはじめる</button>
     </div>
@@ -443,12 +495,13 @@ body.table-mode footer.credits{ display:none; }
           <div class="deck-stack"><div class="layer"></div><div class="layer"></div><div class="layer"></div></div>
           <span id="deck-count-text">山札 0枚</span>
         </div>
+        <button class="icon-btn" onclick="UI.showHelpModal()" title="仮面の説明">？</button>
         <button class="icon-btn" onclick="UI.toggleLog()" title="舞踏会の記録">📜</button>
       </div>
     </div>
 
     <div class="zone" id="opponent-zone">
-      <div class="zone-label">仮面卿（対戦相手）</div>
+      <div class="zone-label">対戦相手</div>
       <div class="player-row">
         <div class="player-name">🎭 <span id="opp-name">仮面卿</span>
           <span class="protect-icon" id="opp-protect">🛡 加護中</span>
@@ -492,6 +545,11 @@ body.table-mode footer.credits{ display:none; }
 <!-- game over modal -->
 <div class="modal-overlay" id="gameover-overlay">
   <div class="modal-box" id="gameover-box"></div>
+</div>
+
+<!-- help / rules modal -->
+<div class="modal-overlay" id="help-overlay">
+  <div class="modal-box help-box" id="help-box"></div>
 </div>
 
 <script src="mask-game.js"></script>

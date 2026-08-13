@@ -5,8 +5,11 @@
  * ファイルを更新したら CACHE_NAME のバージョンを必ず上げること
  * （上げ忘れるとブラウザが古いキャッシュを返し続け、「直したはずなのに直っていない」事故につながる）。
  */
-const CACHE_NAME = 'larva-cache-v2';
+const CACHE_NAME = 'larva-cache-v3';
 
+// カード画像は mask-game.js 内にBase64で埋め込み済みのため、
+// 個別のcards/以下の画像はプリキャッシュ対象に含めない
+// （cards/フォルダが同梱されていない環境でもインストールが失敗しないようにするため）。
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -15,22 +18,17 @@ const PRECACHE_URLS = [
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
-  './cards/card-attendant.png',
-  './cards/card-musician.png',
-  './cards/card-fortune.png',
-  './cards/card-noble_lady.png',
-  './cards/card-spy.png',
-  './cards/card-jester.png',
-  './cards/card-taster.png',
-  './cards/card-black_knight.png',
-  './cards/card-grand_duke.png',
-  './cards/card-masked_host.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) => Promise.all(
+        // 1つのURLの取得に失敗しても他のプリキャッシュを道連れにしない（addAllは全滅するため使わない）
+        PRECACHE_URLS.map((url) => cache.add(url).catch((err) => {
+          console.warn('[SW] precache failed for', url, err);
+        }))
+      ))
       .then(() => self.skipWaiting())
   );
 });
