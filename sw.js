@@ -5,7 +5,7 @@
  * ファイルを更新したら CACHE_NAME のバージョンを必ず上げること
  * （上げ忘れるとブラウザが古いキャッシュを返し続け、「直したはずなのに直っていない」事故につながる）。
  */
-const CACHE_NAME = 'larva-cache-v3';
+const CACHE_NAME = 'larva-cache-v4';
 
 // カード画像は mask-game.js 内にBase64で埋め込み済みのため、
 // 個別のcards/以下の画像はプリキャッシュ対象に含めない
@@ -49,6 +49,24 @@ self.addEventListener('fetch', (event) => {
   // 他オリジン（Google Fonts等）はSWを介さず素通しにする（フォントはネットワーク／ブラウザキャッシュに任せる）
   if (url.origin !== self.location.origin) return;
 
+  // アプリ本体（HTML/JS）は「ネットワーク優先」にする。
+  // これにより、GitHubへpush→デプロイ後にアプリを開き直すだけで最新版に更新される。
+  // オフライン時のみ、直近にキャッシュした版にフォールバックする。
+  const isAppShell = req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('.js') || url.pathname === '/' || url.pathname.endsWith('/');
+  if (isAppShell) {
+    event.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.status === 200) {
+          const resClone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
+        }
+        return res;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // アイコンやマニフェストなど、めったに変わらない静的資産は「キャッシュ優先」のまま
   event.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req).then((res) => {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>LARVA（ラルファ）― 仮面領の一夜</title>
+<title>LARVA（ラルウァ）― 仮面領の一夜</title>
 <meta name="description" content="正体を隠したまま王位を競う、一夜限りの仮面舞踏会カードゲーム">
 <meta name="theme-color" content="#0a0812">
 <link rel="manifest" href="./manifest.json">
@@ -74,6 +74,36 @@ body.table-mode{ overflow:hidden; }
 @media (prefers-reduced-motion: reduce){
   .sparkle{animation:none; display:none;}
   .candle-glow{animation:none;}
+}
+
+/* ---------- splash screen ---------- */
+#splash-screen{
+  position:fixed; inset:0; z-index:200;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+  padding:24px;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,162,39,0.16), transparent 60%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 55%, var(--bg-deep) 100%);
+  transition:opacity .5s ease, visibility .5s ease;
+}
+#splash-screen.dismissed{ opacity:0; visibility:hidden; pointer-events:none; }
+.splash-logo{
+  width:min(58vw, 240px); border-radius:22px; box-shadow:0 22px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,162,39,0.3);
+  animation:splashFloat 3.6s ease-in-out infinite;
+}
+@keyframes splashFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-8px); } }
+.splash-loading{ display:flex; gap:9px; height:10px; align-items:center; }
+.splash-loading span{ width:8px; height:8px; border-radius:50%; background:var(--gold); animation:dotPulse 1.2s ease-in-out infinite; }
+.splash-loading span:nth-child(2){ animation-delay:.15s; }
+.splash-loading span:nth-child(3){ animation-delay:.3s; }
+@keyframes dotPulse{ 0%,80%,100%{ opacity:.25; transform:scale(.8); } 40%{ opacity:1; transform:scale(1.2); } }
+.splash-sub{ font-size:12px; letter-spacing:.16em; color:var(--ivory-dim); font-family:'Shippori Mincho',serif; min-height:1.4em; }
+.splash-start-btn{ display:none; }
+.splash-start-btn.show{ display:inline-block; animation:fadeUp .5s ease both; }
+@media (prefers-reduced-motion: reduce){
+  .splash-logo{ animation:none; }
+  .splash-loading span{ animation:none; opacity:.6; }
+  #splash-screen{ transition:none; }
 }
 
 #app{position:relative; z-index:1; max-width:760px; margin:0 auto; padding:0 14px 40px; display:flex; flex-direction:column; min-height:100dvh;}
@@ -287,12 +317,15 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 }
 @media (prefers-reduced-motion: reduce){ .card-back.thinking{ animation:none; } }
 
-.discard-strip{ display:flex; gap:5px; flex-wrap:wrap; min-height:26px; margin-top:6px; }
+.discard-strip{ display:flex; gap:6px; flex-wrap:wrap; min-height:30px; margin-top:6px; }
 .chip{
-  font-size:10.5px; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,0.06);
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:10.5px; padding:3px 10px 3px 3px; border-radius:999px; background:rgba(255,255,255,0.06);
   border:1px solid rgba(201,162,39,0.3); color:var(--ivory-dim); white-space:nowrap;
   animation:chipIn .32s cubic-bezier(.2,1,.4,1) both;
 }
+.chip.empty{ padding:3px 10px; }
+.chip img{ width:16px; aspect-ratio:300/505; object-fit:cover; border-radius:3px; display:block; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
 @keyframes chipIn{ from{ opacity:0; transform:translateY(6px) scale(.85); } to{ opacity:1; transform:none; } }
 .chip b{ color:var(--gold-light); font-weight:700; }
 .chip.host{ border-color:var(--danger); color:var(--velvet-light); }
@@ -453,21 +486,31 @@ body.table-mode footer.credits{ display:none; }
 <body>
 <div class="sparkle-layer" id="sparkle-layer"></div>
 
+<!-- ============ SPLASH SCREEN ============ -->
+<div id="splash-screen">
+  <img class="splash-logo" src="./icon-512.png" alt="LARVA">
+  <div class="splash-loading" id="splash-loading">
+    <span></span><span></span><span></span>
+  </div>
+  <div class="splash-sub" id="splash-sub">仮面領の扉を開いています…</div>
+  <button class="btn-grand splash-start-btn" id="splash-start-btn" onclick="UI.dismissSplash()">はじめる</button>
+</div>
+
 <div id="app">
   <header class="top" id="site-header">
     <div class="eyebrow">仮面領の一夜</div>
     <h1>LARVA</h1>
-    <div class="subtitle">―ラルファ―　王位継承を賭けた、一夜限りの舞踏会</div>
+    <div class="subtitle">―ラルウァ―　王位継承を賭けた、一夜限りの舞踏会</div>
     <div class="divider"></div>
   </header>
 
   <!-- ============ START SCREEN ============ -->
   <div id="start-screen">
     <p class="lede">
-      「LARVA」は古典ラテン語で<b>仮面・亡霊</b>を意味した語――変身前の仮の姿。今夜のあなたも、その仮の姿のひとつ。<br><br>
-      ここは正体を隠したまま王位を競う<b>「仮面領」</b>。手札は常に<b>1枚</b>――今夜だけ被っている仮面そのもの。<br>
-      山札から引き、2枚のうち1枚を場に出して<b>仮面を外す</b>たび、その仮面の力が発動する。<br>
-      相手の正体を読み切り、最後まで舞踏会に残った者が王位を継ぐ。
+      古き言葉で「仮面」を意味した名――<b>LARVA（ラルウァ）</b>。今宵はその名を冠した、仮面領の舞踏会。<br><br>
+      正体を隠したまま王位を競う一夜。手札はただ<b>1枚</b>、今宵だけ纏う仮面そのもの。山札から引き、2枚のうちどちらかを場に出せば、仮面はその力を解き放つ。<br><br>
+      宣言、覗き見、交換、対決――繰り出す仮面ひとつひとつが、真実と虚偽の境界線になる。<br>
+      相手の正体を読み切り、最後まで舞踏会に残った者だけが、王座に辿り着く。
     </p>
     <div class="rules-toggle-wrap">
       <button class="link-btn" id="rules-toggle-btn" onclick="UI.toggleRules()">▾ 仮面の一覧とルールを見る</button>

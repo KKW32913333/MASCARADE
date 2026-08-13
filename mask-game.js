@@ -585,6 +585,25 @@ const UI = {
     this.buildCandleGlow();
     this.bindRippleEffect();
     this.buildDifficultyPicker();
+    this.initSplash();
+  },
+
+  initSplash(){
+    const loading = document.getElementById('splash-loading');
+    const sub = document.getElementById('splash-sub');
+    const btn = document.getElementById('splash-start-btn');
+    const reveal = () => {
+      if(loading) loading.style.display = 'none';
+      if(sub) sub.textContent = '準備が整いました';
+      if(btn) btn.classList.add('show');
+    };
+    if(this.reducedMotion()){ reveal(); return; }
+    setTimeout(reveal, 1500);
+  },
+
+  dismissSplash(){
+    const el = document.getElementById('splash-screen');
+    if(el) el.classList.add('dismissed');
   },
 
   buildDifficultyPicker(){
@@ -780,10 +799,13 @@ const UI = {
   },
 
   renderDiscardChips(discardArr){
-    if(!discardArr.length) return `<span class="chip" style="opacity:.5;">まだ何も出ていない</span>`;
+    if(!discardArr.length) return `<span class="chip empty" style="opacity:.5;">まだ何も出ていない</span>`;
     return discardArr.map(cid=>{
       const d = cardDef(cid);
-      return `<span class="chip ${d.exposeEliminates?'host':''}"><b>${d.number}</b> ${d.name}</span>`;
+      return `<span class="chip ${d.exposeEliminates?'host':''}" title="${d.name}（${d.number}）">
+        <img src="${d.image}" alt="${d.name}">
+        <b>${d.number}</b> ${d.name}
+      </span>`;
     }).join('');
   },
 
@@ -1059,10 +1081,19 @@ const UI = {
 
 document.addEventListener('DOMContentLoaded', ()=>UI.init());
 
-/* PWA: Service Worker登録（オフライン対応・ホーム画面への追加） */
+/* PWA: Service Worker登録（オフライン対応・ホーム画面への追加）
+   新しいバージョンが有効化されたら、開いたままのタブも自動で1回だけ再読み込みして最新化する。
+   （GitHubへpush→デプロイ後、アプリを開き直すだけでアイコンやインストール状態はそのままに中身だけ更新される） */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('./sw.js').catch((err)=>{
+    navigator.serviceWorker.register('./sw.js').then(()=>{
+      let refreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+        if(refreshed) return;
+        refreshed = true;
+        window.location.reload();
+      });
+    }).catch((err)=>{
       console.warn('Service Worker の登録に失敗しました', err);
     });
   });
