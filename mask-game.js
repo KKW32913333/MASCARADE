@@ -762,7 +762,7 @@ const UI = {
       return;
     }
     const streakHtml = st.streak>0
-      ? `<span class="stats-streak">🔥 ${st.streak}連勝中</span>`
+      ? `<span class="stats-streak">${st.streak}連勝中</span>`
       : `<span class="stats-streak off">連勝なし</span>`;
     el.innerHTML = `
       <span class="stats-record">${st.wins}勝 ${st.losses}敗 ${st.draws}分</span>
@@ -1231,7 +1231,7 @@ const UI = {
     const st = Game.stats[Game.difficulty] || { streak:0, best:0, wins:0, losses:0, draws:0 };
     let streakLine;
     if(s.winner && s.winner.id===0 && st.streak>0){
-      streakLine = `<div class="result-streak win">🔥 ${st.streak}連勝中！（自己ベスト ${st.best}連勝）</div>`;
+      streakLine = `<div class="result-streak win">${st.streak}連勝中！（自己ベスト ${st.best}連勝）</div>`;
     } else if(s.winner && s.winner.id===1){
       streakLine = st.best>0
         ? `<div class="result-streak lose">連勝はここで途切れた（自己ベスト ${st.best}連勝）</div>`
