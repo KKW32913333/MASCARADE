@@ -376,6 +376,24 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .chip.host{ border-color:var(--danger); color:var(--velvet-light); }
 @media (prefers-reduced-motion: reduce){ .chip{ animation:none; } }
 
+.fab-discard{
+  position:fixed; right:16px; bottom:16px; z-index:45;
+  width:52px; height:52px; border-radius:50%; border:1px solid rgba(232,205,115,0.5);
+  background:linear-gradient(180deg, var(--gold-light), var(--gold) 75%);
+  color:var(--ink); font-size:22px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 8px 22px rgba(0,0,0,0.5), 0 0 0 1px rgba(232,205,115,0.3);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.fab-discard:hover{ transform:translateY(-2px); box-shadow:0 10px 26px rgba(0,0,0,0.55), 0 0 0 1px rgba(232,205,115,0.4); }
+.fab-discard:active{ transform:translateY(0) scale(.96); }
+
+.discard-modal-section h5{
+  margin:16px 0 8px; font-size:12px; letter-spacing:.08em; color:var(--gold-light);
+  font-family:'Shippori Mincho',serif; text-align:left;
+}
+.discard-modal-section:first-of-type h5{ margin-top:4px; }
+
 .flying-card{
   position:fixed; z-index:999; pointer-events:none; border-radius:10px; overflow:hidden;
   box-shadow:0 10px 30px rgba(0,0,0,0.6);
@@ -610,7 +628,6 @@ body.table-mode footer.credits{ display:none; }
         </div>
       </div>
       <div class="hand-area" id="opp-hand"></div>
-      <div class="discard-strip" id="opp-discard"></div>
     </div>
 
     <div class="zone" id="action-zone-wrap">
@@ -629,8 +646,9 @@ body.table-mode footer.credits{ display:none; }
         </div>
       </div>
       <div class="hand-area" id="me-hand"></div>
-      <div class="discard-strip" id="me-discard"></div>
     </div>
+
+    <button class="fab-discard" id="fab-discard" onclick="UI.showDiscardModal()" title="これまで場に出た仮面を見る">🂠</button>
   </div>
 
   <div id="log-panel"><button class="lg-close" onclick="UI.toggleLog()" aria-label="閉じる"></button></div>
@@ -651,6 +669,11 @@ body.table-mode footer.credits{ display:none; }
 <!-- help / rules modal -->
 <div class="modal-overlay" id="help-overlay">
   <div class="modal-box help-box" id="help-box"></div>
+</div>
+
+<!-- discard history modal -->
+<div class="modal-overlay" id="discard-overlay">
+  <div class="modal-box help-box" id="discard-box"></div>
 </div>
 
 <script src="mask-game.js"></script>

@@ -894,6 +894,7 @@ const UI = {
     }
     document.getElementById('info-overlay').classList.remove('open');
     document.getElementById('gameover-overlay').classList.remove('open');
+    document.getElementById('discard-overlay').classList.remove('open');
     document.getElementById('log-panel').classList.remove('open');
     document.getElementById('table').classList.remove('open');
     document.getElementById('start-screen').style.display = '';
@@ -927,7 +928,6 @@ const UI = {
     const oppThinking = !s.gameOver && s.turnIndex===1 && (s.phase==='choose' || s.phase==='resolve');
     document.getElementById('opp-hand').innerHTML = opp.hand.map(()=>
       `<div class="card-back${oppThinking?' thinking':''}"><span class="mask-icon">🎭</span></div>`).join('');
-    document.getElementById('opp-discard').innerHTML = this.renderDiscardChips(opp.discard);
 
     // 自分
     document.getElementById('me-protect').classList.toggle('show', me.protectedFlag);
@@ -939,10 +939,10 @@ const UI = {
       chosen: cid===this.selectedCardId,
       onclick: `UI.onMeSelectCard('${cid}')`,
     })).join('');
-    document.getElementById('me-discard').innerHTML = this.renderDiscardChips(me.discard);
 
     this.renderActionPanel();
     if(document.getElementById('log-panel').classList.contains('open')) this.renderLog();
+    if(document.getElementById('discard-overlay').classList.contains('open')) this.showDiscardModal();
   },
 
   renderCard(cid, opts){
@@ -965,6 +965,33 @@ const UI = {
         <b>${d.number}</b> ${d.name}
       </span>`;
     }).join('');
+  },
+
+  showDiscardModal(){
+    const overlay = document.getElementById('discard-overlay');
+    const box = document.getElementById('discard-box');
+    if(!overlay || !box) return;
+    const s = Game.state;
+    if(!s) return;
+    const me = Game.me(), opp = Game.opp();
+    box.innerHTML = `
+      <button class="help-close" onclick="UI.closeDiscardModal()" aria-label="閉じる">×</button>
+      <h3>これまでに場に出された仮面</h3>
+      <div class="discard-modal-section">
+        <h5>${me.name}</h5>
+        <div class="discard-strip">${this.renderDiscardChips(me.discard)}</div>
+      </div>
+      <div class="discard-modal-section">
+        <h5>${opp.name}</h5>
+        <div class="discard-strip">${this.renderDiscardChips(opp.discard)}</div>
+      </div>
+    `;
+    overlay.classList.add('open');
+  },
+
+  closeDiscardModal(){
+    const overlay = document.getElementById('discard-overlay');
+    if(overlay) overlay.classList.remove('open');
   },
 
   renderLog(){
@@ -1105,7 +1132,7 @@ const UI = {
     if(el && !this.reducedMotion()){
       // 選択不可にして二重クリックを防ぐ
       document.querySelectorAll('#me-hand .card.selectable').forEach(c=>{ c.classList.remove('selectable'); c.onclick=null; });
-      this.flyCardToDiscard(el, 'me-discard');
+      this.flyCardToDiscard(el, 'fab-discard');
       setTimeout(()=>Game.discardCard(0, cid), 380);
     } else {
       Game.discardCard(0, cid);
