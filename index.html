@@ -535,8 +535,8 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 @keyframes rippleExpand{ from{ transform:translate(-50%,-50%) scale(0); opacity:.55; } to{ transform:translate(-50%,-50%) scale(22); opacity:0; } }
 @media (prefers-reduced-motion: reduce){ .ripple{ display:none; } }
 
-.num-pad{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; max-width:340px; margin:0 auto 12px; }
-.num-pad .btn{ padding:10px 0; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; }
+.num-pad{ display:grid; grid-template-columns:repeat(5,1fr); gap:9px; max-width:360px; margin:0 auto 12px; }
+.num-pad .btn{ padding:14px 0; font-family:'Cormorant Garamond',serif; font-size:23px; font-weight:700; }
 
 /* ---------- log ---------- */
 #log-toggle{ display:none; }
@@ -738,7 +738,7 @@ body.table-mode footer.credits{ display:none; }
   <!-- ============ START SCREEN ============ -->
   <div id="start-screen">
     <p class="lede">
-      正体を隠したまま王位を競う、一夜限りの仮面舞踏会。手札はただ<b>1枚</b>。山札から引き、2枚のうち1枚を場に出せば、その仮面の力が解き放たれる。相手の正体を読み切り、最後まで舞踏会に残った者が王座に辿り着く。
+      手札は常に1枚。山札から1枚引き、2枚のうち1枚を場に出すと、そのカードの効果が発動します。最後まで残った人、または一番大きい数字を持っていた人の勝ちです。
     </p>
     <div class="rules-toggle-wrap">
       <button class="link-btn" id="rules-toggle-btn" onclick="UI.toggleRules()">▾ 仮面の一覧とルールを見る</button>
