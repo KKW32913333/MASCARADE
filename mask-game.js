@@ -691,21 +691,40 @@ const UI = {
     this.buildCandleGlow();
     this.bindRippleEffect();
     this.buildDifficultyPicker();
+    this.buildStartDeco();
     this.initSplash();
+  },
+
+  // タイトル画面下部の余白を彩る、装飾用の仮面カード（大公・貴婦人）
+  buildStartDeco(){
+    const el = document.getElementById('start-deco');
+    if(!el) return;
+    const picks = ['grand_duke', 'noble_lady'];
+    el.innerHTML = picks.map((id, i)=>{
+      const d = cardDef(id);
+      return `<div class="deco-card ${i===0?'a':'b'}"><img src="${d.image}" alt="${d.name}" loading="lazy"></div>`;
+    }).join('');
   },
 
   initSplash(){
     this.buildSplashParticles();
     this.buildSplashTitle();
-    const loading = document.getElementById('splash-loading');
+    const fill = document.getElementById('splash-progress-fill');
+    const progressBar = document.getElementById('splash-progress');
     const sub = document.getElementById('splash-sub');
     const btn = document.getElementById('splash-start-btn');
     const reveal = () => {
-      if(loading) loading.style.display = 'none';
-      if(sub){ sub.style.opacity = '0'; setTimeout(()=>{ sub.textContent = '準備が整いました'; sub.style.opacity = '1'; }, 220); }
+      if(progressBar) progressBar.style.display = 'none';
+      if(sub) sub.style.display = 'none';
       if(btn) btn.classList.add('show');
     };
     if(this.reducedMotion()){ reveal(); return; }
+
+    // 読み込みバーを0→100%まで滑らかに進める
+    if(fill){
+      const raf = (typeof window!=='undefined' && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (fn)=>setTimeout(fn, 16);
+      raf(()=>{ fill.style.width = '100%'; });
+    }
 
     // ローディング中、雰囲気のある一言を数百ms間隔で切り替える
     const captions = ['仮面領の扉を開いています…', '燭台に灯をともしています…', '仮面を選んでいます…'];
