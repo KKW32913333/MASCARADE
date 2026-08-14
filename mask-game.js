@@ -94,16 +94,30 @@ function ensureDiffStats(stats, diffId){
   return stats[diffId];
 }
 
+// 前回選んだ難易度を覚えておき、次回起動時も同じ相手から始められるようにする
+const LAST_DIFF_KEY = 'mascarade_last_difficulty_v1';
+function loadLastDifficulty(){
+  try{
+    if(typeof localStorage==='undefined') return null;
+    return localStorage.getItem(LAST_DIFF_KEY);
+  }catch(e){ return null; }
+}
+function saveLastDifficulty(id){
+  try{
+    if(typeof localStorage!=='undefined') localStorage.setItem(LAST_DIFF_KEY, id);
+  }catch(e){ /* 失敗しても致命的ではない */ }
+}
+
 /* ---------------------------------------------------------------------
  * 3. ゲーム状態 & コアロジック
  * ------------------------------------------------------------------- */
 const Game = {
   state: null,
-  difficulty: 'courtier',
+  difficulty: (()=>{ const d = loadLastDifficulty(); return DIFFICULTY_DEFS[d] ? d : 'courtier'; })(),
   stats: loadStats(),
 
   setDifficulty(id){
-    if(DIFFICULTY_DEFS[id]) this.difficulty = id;
+    if(DIFFICULTY_DEFS[id]){ this.difficulty = id; saveLastDifficulty(id); }
   },
 
   newGame(){
@@ -754,6 +768,14 @@ const UI = {
     for(let i=0;i<18;i++){
       const top = Math.random()*100, left = Math.random()*100, delay = Math.random()*6;
       html += `<div class="sparkle" style="top:${top}%; left:${left}%; animation-delay:${delay}s;"></div>`;
+    }
+    // ゆっくり漂う大きめの光の粒（漂う灰のような雰囲気を添える）
+    for(let i=0;i<5;i++){
+      const left = 10 + Math.random()*80;
+      const size = 40 + Math.random()*70;
+      const duration = 7 + Math.random()*5;
+      const delay = Math.random()*7;
+      html += `<div class="ember" style="left:${left}%; bottom:-10%; width:${size}px; height:${size}px; animation-duration:${duration}s; animation-delay:${delay}s;"></div>`;
     }
     layer.innerHTML = html;
   },

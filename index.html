@@ -7,8 +7,12 @@
 <meta name="description" content="正体を隠したまま王位を競う、一夜限りの仮面舞踏会カードゲーム">
 <meta name="theme-color" content="#0a0812">
 <link rel="manifest" href="./manifest.json">
-<link rel="icon" href="./icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="icon" href="./favicon-16x16.png" type="image/png" sizes="16x16">
+<link rel="icon" href="./favicon-32x32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="./favicon-48x48.png" type="image/png" sizes="48x48">
+<link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MASCARADE">
@@ -84,36 +88,89 @@ body.table-mode{ overflow:hidden; }
   padding:24px; overflow:hidden;
   background-color:var(--bg-deep);
   background-image:
-    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,162,39,0.16), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(201,162,39,0.18), transparent 62%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(110,20,35,0.22), transparent 65%),
     linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 55%, var(--bg-deep) 100%);
   transition:opacity .4s ease, transform .4s ease, visibility .4s ease;
+  animation:screenBreathe 6s ease-in-out infinite;
 }
 #splash-screen.dismissed{ opacity:0; visibility:hidden; pointer-events:none; transform:scale(1.03); }
+@keyframes screenBreathe{ 0%,100%{ background-position:0 0,0 0,0 0; } 50%{ background-position:0 -6px,0 6px,0 0; } }
+
+.splash-corner{ position:absolute; width:38px; height:38px; z-index:1; pointer-events:none; opacity:.75; }
+.splash-corner::before{ content:''; position:absolute; inset:0; border-color:var(--gold); }
+.splash-corner::after{
+  content:''; position:absolute; width:5px; height:5px; background:var(--gold-light);
+  box-shadow:0 0 6px rgba(232,205,115,0.7); transform:rotate(45deg);
+}
+.splash-corner.tl{ top:20px; left:20px; }
+.splash-corner.tl::before{ border-top:2px solid; border-left:2px solid; border-radius:8px 0 0 0; }
+.splash-corner.tl::after{ top:-3px; left:-3px; }
+.splash-corner.tr{ top:20px; right:20px; }
+.splash-corner.tr::before{ border-top:2px solid; border-right:2px solid; border-radius:0 8px 0 0; }
+.splash-corner.tr::after{ top:-3px; right:-3px; }
+.splash-corner.bl{ bottom:20px; left:20px; }
+.splash-corner.bl::before{ border-bottom:2px solid; border-left:2px solid; border-radius:0 0 0 8px; }
+.splash-corner.bl::after{ bottom:-3px; left:-3px; }
+.splash-corner.br{ bottom:20px; right:20px; }
+.splash-corner.br::before{ border-bottom:2px solid; border-right:2px solid; border-radius:0 0 8px 0; }
+.splash-corner.br::after{ bottom:-3px; right:-3px; }
+
 .splash-particles{ position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+.ember{
+  position:absolute; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(201,162,39,0.55), transparent 70%);
+  filter:blur(5px); opacity:0; animation:emberDrift ease-in-out infinite;
+}
+@keyframes emberDrift{
+  0%{ opacity:0; transform:translateY(24px) scale(.8); }
+  18%{ opacity:.6; }
+  82%{ opacity:.3; }
+  100%{ opacity:0; transform:translateY(-110px) scale(1.2); }
+}
+
 .splash-logo-wrap{ position:relative; z-index:1; display:flex; align-items:center; justify-content:center; padding:0 12px; }
 .splash-logo-wrap::before{
   content:''; position:absolute; inset:-30% -12%; border-radius:50%;
   background:radial-gradient(circle, rgba(201,162,39,0.35), transparent 68%);
   filter:blur(18px); animation:auraPulse 3.2s ease-in-out infinite;
 }
+.splash-logo-wrap::after{
+  content:''; position:absolute; inset:-55% -30%; border-radius:50%; z-index:-1;
+  background:radial-gradient(circle, rgba(110,20,35,0.3), transparent 70%);
+  filter:blur(26px); animation:auraPulse 4.4s ease-in-out .4s infinite;
+}
 @keyframes auraPulse{ 0%,100%{ opacity:.55; transform:scale(.94); } 50%{ opacity:.95; transform:scale(1.06); } }
+
+.splash-orbit{ position:absolute; inset:-46px; z-index:0; pointer-events:none; animation:orbitSpin 16s linear infinite; }
+.splash-orbit span{
+  position:absolute; top:50%; left:50%; width:4px; height:4px; border-radius:50%;
+  background:var(--gold-light); box-shadow:0 0 8px rgba(232,205,115,0.9);
+}
+.splash-orbit span:nth-child(1){ transform:translate(-50%,-50%) rotate(0deg) translateX(min(46vw,190px)); }
+.splash-orbit span:nth-child(2){ transform:translate(-50%,-50%) rotate(120deg) translateX(min(46vw,190px)); }
+.splash-orbit span:nth-child(3){ transform:translate(-50%,-50%) rotate(240deg) translateX(min(46vw,190px)); }
+@keyframes orbitSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
 .splash-title{
   position:relative; z-index:1; margin:0; text-align:center;
   font-family:'Cormorant Garamond', serif; font-weight:600; font-style:italic;
   font-size:clamp(38px,13vw,64px); letter-spacing:.05em;
-  background:linear-gradient(180deg, var(--gold-light), var(--gold) 55%, var(--gold-dim));
+  background:linear-gradient(100deg, var(--gold-dim) 0%, var(--gold-light) 22%, #fff6dd 40%, var(--gold-light) 58%, var(--gold-dim) 80%, var(--gold-light) 100%);
+  background-size:220% 100%;
   -webkit-background-clip:text; background-clip:text; color:transparent;
-  animation:titleGlow 3s ease-in-out infinite;
+  animation:titleGlow 3s ease-in-out infinite, titleSweep 6s linear infinite;
 }
 .splash-title span{ display:inline-block; opacity:0; animation:letterRise .7s cubic-bezier(.2,.9,.3,1) forwards; }
 @keyframes letterRise{ from{ opacity:0; transform:translateY(18px); } to{ opacity:1; transform:translateY(0); } }
-@keyframes titleGlow{ 0%,100%{ filter:drop-shadow(0 0 16px rgba(201,162,39,0.35)); } 50%{ filter:drop-shadow(0 0 30px rgba(201,162,39,0.65)); } }
+@keyframes titleGlow{ 0%,100%{ filter:drop-shadow(0 0 16px rgba(201,162,39,0.35)); } 50%{ filter:drop-shadow(0 0 32px rgba(201,162,39,0.7)); } }
+@keyframes titleSweep{ 0%{ background-position:220% 0; } 100%{ background-position:-40% 0; } }
 .splash-subtitle{
   position:relative; z-index:1; font-family:'Shippori Mincho',serif; font-size:14px; letter-spacing:.22em;
   color:var(--gold-light); opacity:0; animation:fadeUp .7s ease .55s forwards; text-align:center;
 }
 .splash-divider{
-  width:120px; height:1px; position:relative; overflow:hidden; z-index:1;
+  width:150px; height:1px; position:relative; overflow:hidden; z-index:1;
   background:linear-gradient(90deg, transparent, var(--gold), transparent);
   animation:shimmerLine 3.2s ease-in-out infinite;
 }
@@ -121,9 +178,17 @@ body.table-mode{ overflow:hidden; }
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(45deg);
   width:6px; height:6px; background:var(--gold-light); box-shadow:0 0 8px rgba(232,205,115,0.8);
 }
+.splash-divider .divider-flourish{
+  position:absolute; top:50%; width:16px; height:1px;
+  background:linear-gradient(90deg, var(--gold), transparent);
+  opacity:.8;
+}
+.splash-divider .divider-flourish.l{ left:24px; transform:translateY(-50%) scaleX(-1); }
+.splash-divider .divider-flourish.r{ right:24px; transform:translateY(-50%); }
 .splash-progress{
   width:min(60vw, 200px); height:5px; border-radius:999px; overflow:hidden; z-index:1;
   background:rgba(255,255,255,0.08); border:1px solid rgba(201,162,39,0.3);
+  box-shadow:0 0 12px rgba(0,0,0,0.4) inset;
 }
 .splash-progress-fill{
   height:100%; width:0%; border-radius:999px;
@@ -135,9 +200,11 @@ body.table-mode{ overflow:hidden; }
 .splash-start-btn{ display:none; z-index:1; }
 .splash-start-btn.show{ display:inline-block; animation:fadeUp .5s ease both; }
 @media (prefers-reduced-motion: reduce){
+  #splash-screen{ animation:none; }
   .splash-title{ animation:none; }
   .splash-title span{ opacity:1; animation:none; }
-  .splash-logo-wrap::before{ animation:none; }
+  .splash-logo-wrap::before, .splash-logo-wrap::after{ animation:none; }
+  .splash-orbit{ animation:none; display:none; }
   .splash-divider{ animation:none; }
   .splash-progress-fill{ transition:none; }
   #splash-screen{ transition:none; }
@@ -585,12 +652,21 @@ body.table-mode footer.credits{ display:none; }
 
 <!-- ============ SPLASH SCREEN ============ -->
 <div id="splash-screen">
+  <span class="splash-corner tl"></span>
+  <span class="splash-corner tr"></span>
+  <span class="splash-corner bl"></span>
+  <span class="splash-corner br"></span>
   <div class="splash-particles" id="splash-particles"></div>
   <div class="splash-logo-wrap">
+    <div class="splash-orbit"><span></span><span></span><span></span></div>
     <h1 class="splash-title" id="splash-title"></h1>
   </div>
   <div class="splash-subtitle">仮面領の一夜</div>
-  <div class="splash-divider"><span class="divider-gem"></span></div>
+  <div class="splash-divider">
+    <span class="divider-flourish l"></span>
+    <span class="divider-gem"></span>
+    <span class="divider-flourish r"></span>
+  </div>
   <div class="splash-progress" id="splash-progress">
     <div class="splash-progress-fill" id="splash-progress-fill"></div>
   </div>
@@ -633,15 +709,15 @@ body.table-mode footer.credits{ display:none; }
   <!-- ============ TABLE ============ -->
   <div id="table">
     <div class="status-strip">
-      <button class="icon-btn" onclick="UI.backToStart()" title="タイトルへ戻る">← タイトル</button>
+      <button class="icon-btn" onclick="UI.backToStart()" title="タイトルへ戻る" aria-label="タイトルへ戻る">← タイトル</button>
       <div class="turn-badge" id="turn-badge">―</div>
       <div class="status-right">
         <div class="deck-count">
           <div class="deck-stack"><div class="layer"></div><div class="layer"></div><div class="layer"></div></div>
           <span id="deck-count-text">山札 0枚</span>
         </div>
-        <button class="icon-btn" onclick="UI.showHelpModal()" title="仮面の説明">？</button>
-        <button class="icon-btn" onclick="UI.toggleLog()" title="舞踏会の記録">📜</button>
+        <button class="icon-btn" onclick="UI.showHelpModal()" title="仮面の説明" aria-label="仮面の説明を見る">？</button>
+        <button class="icon-btn" onclick="UI.toggleLog()" title="舞踏会の記録" aria-label="舞踏会の記録を開く">📜</button>
       </div>
     </div>
 
@@ -674,7 +750,7 @@ body.table-mode footer.credits{ display:none; }
       <div class="hand-area" id="me-hand"></div>
     </div>
 
-    <button class="fab-discard" id="fab-discard" onclick="UI.showDiscardModal()" title="これまで場に出た仮面を見る">🂠</button>
+    <button class="fab-discard" id="fab-discard" onclick="UI.showDiscardModal()" title="これまで場に出た仮面を見る" aria-label="これまで場に出た仮面の一覧を見る">🂠</button>
   </div>
 
   <div id="log-panel"><button class="lg-close" onclick="UI.toggleLog()" aria-label="閉じる"></button></div>
