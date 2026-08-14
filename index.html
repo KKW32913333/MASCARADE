@@ -219,6 +219,15 @@ header.top{
   text-align:center; padding:16px 10px 10px; position:relative; flex:0 0 auto;
   transition:padding .25s ease;
 }
+.sfx-toggle{
+  position:absolute; top:12px; right:12px; z-index:2;
+  background:rgba(255,255,255,0.06); border:1px solid rgba(201,162,39,0.3); color:var(--ivory);
+  width:34px; height:34px; border-radius:50%; font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .15s ease, opacity .2s ease;
+}
+.sfx-toggle:hover{ background:rgba(201,162,39,0.18); }
+.sfx-toggle.muted{ opacity:.55; }
+header.top.compact .sfx-toggle{ top:6px; right:8px; width:26px; height:26px; font-size:12px; }
 header.top .eyebrow{
   letter-spacing:.35em; font-size:10px; color:var(--gold); text-transform:uppercase; opacity:0;
   animation:fadeUp .7s ease .05s forwards;
@@ -618,6 +627,15 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 }
 .help-close:hover{ color:var(--ivory); background:rgba(255,255,255,0.08); }
 
+/* ---------- handoff（手番受け渡し）画面 ---------- */
+.handoff-overlay{ z-index:80; background:rgba(5,4,10,0.94); backdrop-filter:blur(3px); }
+.handoff-box{ max-width:340px; }
+.handoff-icon{ font-size:44px; margin-bottom:8px; animation:handoffFloat 2.4s ease-in-out infinite; }
+@keyframes handoffFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
+.handoff-box h3{ font-family:'Shippori Mincho',serif; color:var(--gold-light); font-size:19px; margin:0 0 10px; letter-spacing:.05em; }
+.handoff-sub{ font-size:13px; line-height:1.8; color:var(--ivory-dim); margin:0 0 20px; }
+@media (prefers-reduced-motion: reduce){ .handoff-icon{ animation:none; } }
+
 /* ---------- game over ---------- */
 #gameover-overlay .modal-box{ max-width:400px; }
 #gameover-overlay .result-title{
@@ -644,6 +662,40 @@ body.table-mode footer.credits{ display:none; }
 @media (max-width:420px){
   .card{ width:88px; }
   .card-back{ width:64px; }
+}
+
+/* ---------- 横向き（ランドスケープ）のスマホ向け調整 ---------- */
+@media (orientation:landscape) and (max-height:500px){
+  header.top{ padding:5px 10px 3px; }
+  header.top .eyebrow, header.top .subtitle, header.top .divider{ display:none; }
+  header.top h1{ font-size:19px; margin:0; }
+  .sfx-toggle{ width:24px; height:24px; font-size:11px; top:6px; right:8px; }
+  #start-screen{ padding:2px 6px 6px; }
+  .lede{ font-size:12px; line-height:1.5; margin:4px auto 8px; }
+  .rules-toggle-wrap{ margin-bottom:4px; }
+  .difficulty-wrap{ margin:6px 0 4px; }
+  .start-deco{ display:none; }
+  .status-strip{ padding:0 2px 2px; }
+  .zone{ padding:6px 12px; }
+  .zone::before, .zone::after{ width:9px; height:9px; }
+  .hand-area{ margin-top:4px; }
+  .card{ width:82px; }
+  .card-back{ width:60px; }
+  #action-panel{ padding:8px; }
+  #action-panel .prompt{ font-size:12px; margin-bottom:6px; }
+  .zone-label{ font-size:9px; top:-7px; padding:0 6px; }
+  .fab-discard{ width:42px; height:42px; font-size:18px; right:10px; bottom:10px; }
+  .player-name{ font-size:12px; }
+}
+
+/* ---------- タブレット・PC（幅に余裕がある画面）向けの拡大表示 ---------- */
+@media (min-width:700px){
+  .card{ width:150px; }
+  .card-back{ width:114px; }
+  .zone{ padding:18px 24px; }
+  #action-panel{ padding:18px 20px; }
+  #action-panel .prompt{ font-size:15px; }
+  .hand-area{ gap:16px; }
 }
 </style>
 </head>
@@ -676,6 +728,7 @@ body.table-mode footer.credits{ display:none; }
 
 <div id="app">
   <header class="top" id="site-header">
+    <button class="sfx-toggle" id="sfx-toggle" onclick="UI.toggleSfx()" title="効果音のオン/オフ" aria-label="効果音のオン/オフ">🔊</button>
     <div class="eyebrow">仮面領の一夜</div>
     <h1>MASCARADE</h1>
     <div class="subtitle">―マスカレード―　王位継承を賭けた、一夜限りの舞踏会</div>
@@ -693,6 +746,12 @@ body.table-mode footer.credits{ display:none; }
     <div id="rules-panel"></div>
 
     <div class="difficulty-wrap">
+      <div class="difficulty-label">対戦形式</div>
+      <div class="difficulty-row" id="mode-row"></div>
+      <div class="difficulty-epithet" id="mode-epithet"></div>
+    </div>
+
+    <div class="difficulty-wrap" id="difficulty-wrap">
       <div class="difficulty-label">対戦相手の格</div>
       <div class="difficulty-row" id="difficulty-row"></div>
       <div class="difficulty-epithet" id="difficulty-epithet"></div>
@@ -722,7 +781,7 @@ body.table-mode footer.credits{ display:none; }
     </div>
 
     <div class="zone" id="opponent-zone">
-      <div class="zone-label">対戦相手</div>
+      <div class="zone-label" id="opp-zone-label">対戦相手</div>
       <div class="player-row">
         <div class="player-name">🎭 <span id="opp-name">仮面卿</span>
           <span class="protect-icon" id="opp-protect">🛡 加護中</span>
@@ -740,7 +799,7 @@ body.table-mode footer.credits{ display:none; }
     </div>
 
     <div class="zone" id="player-zone">
-      <div class="zone-label">あなた</div>
+      <div class="zone-label" id="me-zone-label">あなた</div>
       <div class="player-row">
         <div class="player-name">🕯 <span id="me-name">あなた</span>
           <span class="protect-icon" id="me-protect">🛡 加護中</span>
@@ -776,6 +835,16 @@ body.table-mode footer.credits{ display:none; }
 <!-- discard history modal -->
 <div class="modal-overlay" id="discard-overlay">
   <div class="modal-box help-box" id="discard-box"></div>
+</div>
+
+<!-- ローカル2人対戦：手番受け渡し画面 -->
+<div class="modal-overlay handoff-overlay" id="handoff-overlay">
+  <div class="modal-box handoff-box">
+    <div class="handoff-icon">🎭</div>
+    <h3 id="handoff-title">次の番です</h3>
+    <p class="handoff-sub">スマホを渡してください。<br>準備ができたら下のボタンを押してください。</p>
+    <button class="btn-grand" onclick="UI.confirmHandoff()">見る準備ができました</button>
+  </div>
 </div>
 
 <script src="mask-game.js"></script>

@@ -74,6 +74,15 @@ const DIFFICULTY_DEFS = {
 const DIFFICULTY_ORDER = ['novice','courtier','wily'];
 
 /* ---------------------------------------------------------------------
+ * 2b-2. 対戦形式定義（CPU戦 / ローカル2人対戦）
+ * ------------------------------------------------------------------- */
+const MODE_DEFS = {
+  cpu:     { id:'cpu',     label:'CPU対戦',   epithet:'仮面卿と、腕試しの一夜を。' },
+  local2p: { id:'local2p', label:'友達と対戦', epithet:'1台のスマホを手渡しながら遊ぶ、パス＆プレイ形式。' },
+};
+const MODE_ORDER = ['cpu','local2p'];
+
+/* ---------------------------------------------------------------------
  * 2c. 戦績（連勝）の永続化
  * ------------------------------------------------------------------- */
 const STATS_KEY = 'mascarade_stats_v1';
@@ -109,35 +118,101 @@ function saveLastDifficulty(id){
 }
 
 /* ---------------------------------------------------------------------
+ * 2d. 効果音（Web Audio APIで簡易合成。外部音源ファイルは使用しない）
+ * ------------------------------------------------------------------- */
+const SFX_KEY = 'mascarade_sfx_v1';
+const SFX = {
+  ctx: null,
+  enabled: (function(){
+    try{
+      if(typeof localStorage==='undefined') return true;
+      const v = localStorage.getItem(SFX_KEY);
+      return v===null ? true : v==='1';
+    }catch(e){ return true; }
+  })(),
+
+  setEnabled(v){
+    this.enabled = !!v;
+    try{ if(typeof localStorage!=='undefined') localStorage.setItem(SFX_KEY, v?'1':'0'); }catch(e){}
+  },
+
+  ensureCtx(){
+    if(typeof window==='undefined') return null;
+    if(!this.ctx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return null;
+      try{ this.ctx = new AC(); }catch(e){ return null; }
+    }
+    if(this.ctx.state==='suspended'){ this.ctx.resume().catch(()=>{}); }
+    return this.ctx;
+  },
+
+  tone(freq, duration, type, gainPeak, delay){
+    if(!this.enabled) return;
+    const ctx = this.ensureCtx();
+    if(!ctx) return;
+    try{
+      const t0 = ctx.currentTime + (delay||0);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.linearRampToValueAtTime(gainPeak||0.14, t0+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+duration);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0+duration+0.05);
+    }catch(e){ /* 音声再生に失敗しても致命的ではない */ }
+  },
+
+  card(){ this.tone(360,0.11,'triangle',0.10); this.tone(540,0.09,'triangle',0.07,0.04); },
+  turn(){ this.tone(660,0.16,'sine',0.08); },
+  eliminate(){ this.tone(170,0.4,'sawtooth',0.09); this.tone(110,0.5,'sawtooth',0.07,0.09); },
+  win(){ [523,659,784,1047].forEach((f,i)=>this.tone(f,0.32,'triangle',0.11,i*0.09)); },
+  lose(){ [392,330,262].forEach((f,i)=>this.tone(f,0.38,'sine',0.08,i*0.12)); },
+  click(){ this.tone(880,0.05,'square',0.045); },
+};
+
+/* ---------------------------------------------------------------------
  * 3. ゲーム状態 & コアロジック
  * ------------------------------------------------------------------- */
 const Game = {
   state: null,
   difficulty: (()=>{ const d = loadLastDifficulty(); return DIFFICULTY_DEFS[d] ? d : 'courtier'; })(),
   stats: loadStats(),
+  mode: 'cpu', // 'cpu' | 'local2p'
 
   setDifficulty(id){
     if(DIFFICULTY_DEFS[id]){ this.difficulty = id; saveLastDifficulty(id); }
+  },
+
+  setMode(m){
+    if(m==='cpu' || m==='local2p') this.mode = m;
   },
 
   newGame(){
     const deck = buildFreshDeck();
     const removedCard = deck.pop(); // 転生札（誰にも見えない1枚、裏向きで除外）
     const forceCPU = (typeof window!=='undefined' && window.__TEST_FORCE_CPU); // ヘッドレステスト専用フック
+    const isLocal2p = this.mode === 'local2p';
     const diff = DIFFICULTY_DEFS[this.difficulty] || DIFFICULTY_DEFS.courtier;
     CPU.rangeMemory = {}; // 前の対戦の記憶を持ち越さない
     CPU.bottomMemory = null;
-    const players = [
+    const players = isLocal2p ? [
+      { id:0, name:'プレイヤー1', isCPU:false, hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
+      { id:1, name:'プレイヤー2', isCPU:false, hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
+    ] : [
       { id:0, name:'あなた', isCPU: !!forceCPU, hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
       { id:1, name:diff.label, isCPU:true,  hand:[deck.pop()], alive:true, protectedFlag:false, discard:[] },
     ];
     this.state = {
       deck, removedCard,
       players,
+      isLocal2p,
       turnIndex: Math.random()<0.5 ? 0 : 1,
       turnCount: 0,
       log: [],
-      phase: 'idle',       // idle | choose | resolve | over
+      phase: 'idle',       // idle | choose | resolve | over | handoff
       pendingCard: null,   // 選択済みだが未解決のカードID（対象/数字待ち）
       gameOver: false,
       winner: null,
@@ -146,7 +221,8 @@ const Game = {
     UI.showTable();
     this.addLog(`舞踏会の幕が上がる。1枚の仮面が「転生札」として裏向きに除外された。最初の番は「${players[this.state.turnIndex].name}」。`, true);
     UI.render();
-    this.startTurn();
+    // 最初の手番は、スタート画面から今まさに操作していた人が続けて見るので受け渡し演出は不要
+    this.startTurn({skipHandoff:true});
   },
 
   addLog(text, isTurnHeader){
@@ -158,17 +234,34 @@ const Game = {
   other(idx){ return idx===0?1:0; },
   playerAt(idx){ return this.state.players[idx]; },
 
-  startTurn(){
+  startTurn(opts){
+    opts = opts || {};
     const s = this.state;
     if(!s || s.gameOver) return;
-    s.turnCount++;
-    const p = s.players[s.turnIndex];
 
     // 山札が尽きた場合はここでゲーム終了（比べ合い）
     if(s.deck.length===0){
       this.endGameByShowdown();
       return;
     }
+
+    // ローカル2人対戦では、最初のターンを除き手番が変わるたびに
+    // 「スマホを渡してください」の受け渡し画面を挟んでから手札を見せる
+    if(s.isLocal2p && !opts.skipHandoff){
+      s.phase = 'handoff';
+      const p = s.players[s.turnIndex];
+      if(typeof UI!=='undefined' && UI.showHandoff) UI.showHandoff(p.name);
+      return;
+    }
+
+    this.revealTurn();
+  },
+
+  revealTurn(){
+    const s = this.state;
+    if(!s || s.gameOver) return;
+    s.turnCount++;
+    const p = s.players[s.turnIndex];
 
     p.protectedFlag = false; // 加護は自分の番が来た時点で解除
     const drawn = s.deck.pop();
@@ -196,6 +289,7 @@ const Game = {
     p.hand.splice(idx,1);
     p.discard.push(cardId);
     const def = cardDef(cardId);
+    if(typeof SFX!=='undefined') SFX.card();
 
     if(!opts.forced){
       this.addLog(`${p.name} は「${def.name}（${def.number}）」の仮面を外し、場に出した。`);
@@ -512,6 +606,7 @@ const Game = {
       p.discard.push(c);
     }
     this.addLog(`💀 ${p.name} は退場した。（${reason}）`);
+    if(typeof SFX!=='undefined') SFX.eliminate();
     if(typeof UI!=='undefined' && UI.flashEliminated){ UI.flashEliminated(playerIdx); }
     if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`💀 ${p.name}が退場（${reason}）`, 'danger', 2600); }
   },
@@ -559,6 +654,7 @@ const Game = {
   // 現在選択中の難易度に対する戦績（勝敗・連勝）を更新して保存する
   recordResult(){
     const s = this.state;
+    if(s.isLocal2p) return; // ローカル2人対戦は難易度別の戦績には含めない
     const st = ensureDiffStats(this.stats, this.difficulty);
     st.played++;
     if(s.winner && s.winner.id===0){
@@ -569,6 +665,24 @@ const Game = {
       st.draws++; st.streak = 0;
     }
     saveStats(this.stats);
+  },
+
+  // 投了する（CPU戦では常にプレイヤー0、ローカル2人対戦では今の手番の側）
+  concede(){
+    const s = this.state;
+    if(!s || s.gameOver) return;
+    const concederIdx = s.isLocal2p ? s.turnIndex : 0;
+    const winnerIdx = this.other(concederIdx);
+    const conceder = this.playerAt(concederIdx);
+    const winner = this.playerAt(winnerIdx);
+    this.addLog(`💀 ${conceder.name}は投了した。`);
+    s.gameOver = true;
+    s.winner = winner.alive ? winner : null;
+    s.endReason = 'concede';
+    s.phase = 'over';
+    this.recordResult();
+    UI.render();
+    UI.showGameOver();
   },
 
   advanceTurn(){
@@ -704,9 +818,24 @@ const UI = {
     this.buildSparkles();
     this.buildCandleGlow();
     this.bindRippleEffect();
+    this.buildModePicker();
     this.buildDifficultyPicker();
     this.buildStartDeco();
     this.initSplash();
+    this.updateSfxButton();
+  },
+
+  toggleSfx(){
+    SFX.setEnabled(!SFX.enabled);
+    this.updateSfxButton();
+    if(SFX.enabled) SFX.click();
+  },
+
+  updateSfxButton(){
+    const btn = document.getElementById('sfx-toggle');
+    if(!btn) return;
+    btn.textContent = SFX.enabled ? '🔊' : '🔇';
+    btn.classList.toggle('muted', !SFX.enabled);
   },
 
   // タイトル画面下部の余白を彩る、装飾用の仮面カード（大公・貴婦人）
@@ -799,10 +928,35 @@ const UI = {
 
   selectDifficulty(id){
     Game.setDifficulty(id);
-    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.toggle('active', b.dataset.diff===id));
+    document.querySelectorAll('#difficulty-row .diff-btn').forEach(b=>b.classList.toggle('active', b.dataset.diff===id));
     const epithetEl = document.getElementById('difficulty-epithet');
     if(epithetEl) epithetEl.textContent = DIFFICULTY_DEFS[id].epithet;
     this.renderStatsPanel();
+  },
+
+  buildModePicker(){
+    const row = document.getElementById('mode-row');
+    const epithetEl = document.getElementById('mode-epithet');
+    if(!row) return;
+    row.innerHTML = MODE_ORDER.map(id=>{
+      const d = MODE_DEFS[id];
+      return `<button class="diff-btn${id===Game.mode?' active':''}" data-mode="${id}" onclick="UI.selectMode('${id}')">${d.label}</button>`;
+    }).join('');
+    if(epithetEl) epithetEl.textContent = MODE_DEFS[Game.mode].epithet;
+    this.updateModeVisibility();
+  },
+
+  selectMode(id){
+    Game.setMode(id);
+    document.querySelectorAll('#mode-row .diff-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===id));
+    const epithetEl = document.getElementById('mode-epithet');
+    if(epithetEl) epithetEl.textContent = MODE_DEFS[id].epithet;
+    this.updateModeVisibility();
+  },
+
+  updateModeVisibility(){
+    const diffWrap = document.getElementById('difficulty-wrap');
+    if(diffWrap) diffWrap.style.display = (Game.mode==='local2p') ? 'none' : '';
   },
 
   renderStatsPanel(){
@@ -835,8 +989,11 @@ const UI = {
 
   bindRippleEffect(){
     document.addEventListener('click', (e)=>{
-      const btn = e.target.closest('.btn, .btn-grand');
-      if(!btn || this.reducedMotion()) return;
+      const btn = e.target.closest('.btn, .btn-grand, .icon-btn, .diff-btn, .fab-discard');
+      if(!btn) return;
+      if(typeof SFX!=='undefined') SFX.click();
+      if(this.reducedMotion()) return;
+      if(!btn.classList.contains('btn') && !btn.classList.contains('btn-grand')) return;
       const rect = btn.getBoundingClientRect();
       const ripple = document.createElement('span');
       ripple.className = 'ripple';
@@ -930,12 +1087,35 @@ const UI = {
   backToStart(){
     const s = Game.state;
     if(s && !s.gameOver){
-      const ok = window.confirm('対戦中です。タイトルへ戻ると今の勝負は終了します。よろしいですか？');
-      if(!ok) return;
+      let msg;
+      if(s.isLocal2p){
+        const conceder = Game.playerAt(s.turnIndex);
+        const winner = Game.playerAt(Game.other(s.turnIndex));
+        msg = `対戦は進行中です。<br>投了すると${conceder.name}の負け、${winner.name}の勝利として記録されます。`;
+      } else {
+        const oppName = Game.opp() ? Game.opp().name : '相手';
+        msg = `対戦は進行中です。<br>投了すると${oppName}の勝利として記録されます。`;
+      }
+      UI.showInfoModal(
+        '対戦を中断しますか？',
+        msg,
+        null, false,
+        [
+          { label:'投了する', action:()=>{ Game.concede(); } },
+          { label:'記録せずタイトルへ戻る', action:()=>{ UI.forceBackToStart(); } },
+          { label:'対戦に戻る', action:()=>{} },
+        ]
+      );
+      return;
     }
+    UI.forceBackToStart();
+  },
+
+  forceBackToStart(){
     document.getElementById('info-overlay').classList.remove('open');
     document.getElementById('gameover-overlay').classList.remove('open');
     document.getElementById('discard-overlay').classList.remove('open');
+    document.getElementById('handoff-overlay').classList.remove('open');
     document.getElementById('log-panel').classList.remove('open');
     document.getElementById('table').classList.remove('open');
     document.getElementById('start-screen').style.display = '';
@@ -956,30 +1136,40 @@ const UI = {
   render(){
     if(!Game.state) return;
     const s = Game.state;
-    const me = Game.me(), opp = Game.opp();
+    // CPU戦では常に「あなた(0)」が下段・CPU(1)が上段。
+    // ローカル2人対戦では、常に「今の手番」が下段（操作できる側）・「待機中」が上段になる。
+    const bottomIdx = s.isLocal2p ? s.turnIndex : 0;
+    const topIdx = Game.other(bottomIdx);
+    const bottomPlayer = s.players[bottomIdx];
+    const topPlayer = s.players[topIdx];
 
     document.getElementById('turn-badge').textContent =
       s.gameOver ? '舞踏会、終幕' : `${s.players[s.turnIndex].name}の番`;
     document.getElementById('deck-count-text').textContent = `山札 ${s.deck.length}枚`;
 
-    // 相手
-    document.getElementById('opp-name').textContent = opp.name;
-    document.getElementById('opp-protect').classList.toggle('show', opp.protectedFlag);
-    document.getElementById('opp-eliminated').classList.toggle('show', !opp.alive);
-    const oppThinking = !s.gameOver && s.turnIndex===1 && (s.phase==='choose' || s.phase==='resolve');
-    document.getElementById('opp-hand').innerHTML = opp.hand.map(()=>
+    // 上段（対戦相手／待機中）
+    document.getElementById('opp-name').textContent = topPlayer.name;
+    document.getElementById('opp-protect').classList.toggle('show', topPlayer.protectedFlag);
+    document.getElementById('opp-eliminated').classList.toggle('show', !topPlayer.alive);
+    const oppThinking = !s.gameOver && topPlayer.isCPU && (s.phase==='choose' || s.phase==='resolve');
+    document.getElementById('opp-hand').innerHTML = topPlayer.hand.map(()=>
       `<div class="card-back${oppThinking?' thinking':''}"><span class="mask-icon">🎭</span></div>`).join('');
+    const oppZoneLabel = document.getElementById('opp-zone-label');
+    if(oppZoneLabel) oppZoneLabel.textContent = s.isLocal2p ? '待機中' : '対戦相手';
 
-    // 自分
-    document.getElementById('me-protect').classList.toggle('show', me.protectedFlag);
-    document.getElementById('me-eliminated').classList.toggle('show', !me.alive);
-    const meCanChoose = !s.gameOver && s.phase==='choose' && s.turnIndex===0;
+    // 下段（あなた／今の手番）
+    document.getElementById('me-name').textContent = bottomPlayer.name;
+    document.getElementById('me-protect').classList.toggle('show', bottomPlayer.protectedFlag);
+    document.getElementById('me-eliminated').classList.toggle('show', !bottomPlayer.alive);
+    const meCanChoose = !s.gameOver && s.phase==='choose' && !bottomPlayer.isCPU && bottomIdx===s.turnIndex;
     if(!meCanChoose) this.selectedCardId = null; // 自分の選択フェーズ以外では選択状態を破棄
-    document.getElementById('me-hand').innerHTML = me.hand.map((cid,i)=>this.renderCard(cid,{
+    document.getElementById('me-hand').innerHTML = bottomPlayer.hand.map((cid,i)=>this.renderCard(cid,{
       selectable: meCanChoose,
       chosen: cid===this.selectedCardId,
       onclick: `UI.onMeSelectCard('${cid}')`,
     })).join('');
+    const meZoneLabel = document.getElementById('me-zone-label');
+    if(meZoneLabel) meZoneLabel.textContent = s.isLocal2p ? '手番' : 'あなた';
 
     this.renderActionPanel();
     if(document.getElementById('log-panel').classList.contains('open')) this.renderLog();
@@ -1035,6 +1225,20 @@ const UI = {
     if(overlay) overlay.classList.remove('open');
   },
 
+  showHandoff(name){
+    const overlay = document.getElementById('handoff-overlay');
+    const title = document.getElementById('handoff-title');
+    if(!overlay) return;
+    if(title) title.textContent = `${name}の番です`;
+    overlay.classList.add('open');
+  },
+
+  confirmHandoff(){
+    const overlay = document.getElementById('handoff-overlay');
+    if(overlay) overlay.classList.remove('open');
+    Game.revealTurn();
+  },
+
   renderLog(){
     const panel = document.getElementById('log-panel');
     const s = Game.state;
@@ -1061,19 +1265,23 @@ const UI = {
     if(s.phase==='resolve' && s.pendingCard){
       const cid = s.pendingCard;
       const d = cardDef(cid);
-      const actorIsMe = s.turnIndex===0;
+      const activeIdx = s.turnIndex;
+      const targetIdx = Game.other(activeIdx);
+      // actorIsMe: 今の手番のプレイヤーが（CPUではなく）その場で操作できる人間かどうか
+      // CPU戦では自分の番（0）の時だけ true。ローカル2人対戦ではどちらの番でも true になる。
+      const actorIsMe = !s.players[activeIdx].isCPU;
       if(!actorIsMe){
-        box.innerHTML = `${Game.opp().name}が「${d.name}」の力を発動している…`;
+        box.innerHTML = `${s.players[activeIdx].name}が「${d.name}」の力を発動している…`;
         return;
       }
       if(d.effect==='guessRank'){
-        box.innerHTML = `「${d.name}」発動：${Game.opp().name}の手札の数字を宣言してください（1は宣言できません）`;
+        box.innerHTML = `「${d.name}」発動：${s.players[targetIdx].name}の手札の数字を宣言してください（1は宣言できません）`;
         const pad = document.createElement('div');
         pad.className = 'num-pad';
         for(let n=2;n<=10;n++){
           const b = document.createElement('button');
           b.className='btn'; b.textContent=n;
-          b.onclick = ()=>Game.effGuessRank(0, n);
+          b.onclick = ()=>Game.effGuessRank(activeIdx, n);
           pad.appendChild(b);
         }
         panel.appendChild(pad);
@@ -1082,17 +1290,17 @@ const UI = {
       // 自分専用の情報効果は、自動的に発動して結果モーダルを開く（確認クリックを挟まない）
       if(d.effect==='peekDeckTop'){
         box.innerHTML = `「${d.name}」発動中…`;
-        Game.effPeekDeckTop(0);
+        Game.effPeekDeckTop(activeIdx);
         return;
       }
       if(d.effect==='peekDeckBottom'){
         box.innerHTML = `「${d.name}」発動中…`;
-        Game.effPeekDeckBottom(0);
+        Game.effPeekDeckBottom(activeIdx);
         return;
       }
       if(d.effect==='foreseeTwo'){
         box.innerHTML = `「${d.name}」発動中…`;
-        Game.effForeseeTwo(0);
+        Game.effForeseeTwo(activeIdx);
         return;
       }
       if(d.effect==='protectSelf'){
@@ -1101,22 +1309,22 @@ const UI = {
         row.className='choice-row';
         const b = document.createElement('button');
         b.className='btn primary'; b.textContent='発動する';
-        b.onclick = ()=>Game.effProtectSelf(0);
+        b.onclick = ()=>Game.effProtectSelf(activeIdx);
         row.appendChild(b);
         panel.appendChild(row);
         return;
       }
       if(['peekRange','doubleRedraw','secretRedraw','compareHand'].includes(d.effect)){
-        box.innerHTML = `「${d.name}」の力を${Game.opp().name}に対して発動します。`;
+        box.innerHTML = `「${d.name}」の力を${s.players[targetIdx].name}に対して発動します。`;
         const row = document.createElement('div');
         row.className='choice-row';
         const b = document.createElement('button');
         b.className='btn primary'; b.textContent='発動する';
         b.onclick = ()=>{
-          if(d.effect==='peekRange') Game.effPeekRange(0);
-          else if(d.effect==='doubleRedraw') Game.effDoubleRedraw(0);
-          else if(d.effect==='secretRedraw') Game.effSecretRedraw(0);
-          else if(d.effect==='compareHand') Game.effCompareHand(0);
+          if(d.effect==='peekRange') Game.effPeekRange(activeIdx);
+          else if(d.effect==='doubleRedraw') Game.effDoubleRedraw(activeIdx);
+          else if(d.effect==='secretRedraw') Game.effSecretRedraw(activeIdx);
+          else if(d.effect==='compareHand') Game.effCompareHand(activeIdx);
         };
         row.appendChild(b);
         panel.appendChild(row);
@@ -1125,7 +1333,8 @@ const UI = {
     }
 
     if(s.phase==='choose'){
-      if(s.turnIndex===0){
+      const activeIsHuman = !s.players[s.turnIndex].isCPU;
+      if(activeIsHuman){
         if(this.selectedCardId){
           const d = cardDef(this.selectedCardId);
           box.innerHTML = `「${d.name}（${d.number}）」を場に出しますか？<br><span class="sub-desc">${d.desc}</span>`;
@@ -1143,7 +1352,7 @@ const UI = {
           box.innerHTML = 'どちらの仮面を場に出しますか？（手札から1枚を選んでください）';
         }
       } else {
-        box.innerHTML = `${Game.opp().name}が思案している…`;
+        box.innerHTML = `${s.players[s.turnIndex].name}が思案している…`;
       }
       return;
     }
@@ -1153,7 +1362,7 @@ const UI = {
 
   onMeSelectCard(cid){
     const s = Game.state;
-    if(!s || s.phase!=='choose' || s.turnIndex!==0) return;
+    if(!s || s.phase!=='choose' || s.players[s.turnIndex].isCPU) return;
     this.selectedCardId = (this.selectedCardId===cid) ? null : cid;
     this.render();
   },
@@ -1167,16 +1376,17 @@ const UI = {
     const cid = this.selectedCardId;
     if(!cid) return;
     const s = Game.state;
-    if(!s || s.phase!=='choose' || s.turnIndex!==0) return;
+    if(!s || s.phase!=='choose' || s.players[s.turnIndex].isCPU) return;
+    const activeIdx = s.turnIndex;
     this.selectedCardId = null;
     const el = document.querySelector(`#me-hand .card[data-cid="${cid}"]`);
     if(el && !this.reducedMotion()){
       // 選択不可にして二重クリックを防ぐ
       document.querySelectorAll('#me-hand .card.selectable').forEach(c=>{ c.classList.remove('selectable'); c.onclick=null; });
       this.flyCardToDiscard(el, 'fab-discard');
-      setTimeout(()=>Game.discardCard(0, cid), 380);
+      setTimeout(()=>Game.discardCard(activeIdx, cid), 380);
     } else {
-      Game.discardCard(0, cid);
+      Game.discardCard(activeIdx, cid);
     }
   },
 
@@ -1211,6 +1421,7 @@ const UI = {
   },
 
   showTurnBanner(text){
+    if(typeof SFX!=='undefined') SFX.turn();
     if(this.reducedMotion()) return;
     const el = document.createElement('div');
     el.className = 'turn-banner';
@@ -1296,8 +1507,20 @@ const UI = {
     const overlay = document.getElementById('gameover-overlay');
     const box = document.getElementById('gameover-box');
     let title, sub, palette;
-    if(s.winner && s.winner.id===0){ title='あなたの勝利'; sub='正体を隠し通し、王位を継承した。'; palette=['var(--gold-light)','var(--gold)','var(--royal)']; }
-    else if(s.winner && s.winner.id===1){ title=`${s.players[1].name}の勝利`; sub='あなたの正体は見破られてしまった。'; palette=['var(--velvet-light)','var(--danger)','var(--gold-dim)']; }
+    if(s.isLocal2p){
+      if(s.winner){
+        title = `${s.winner.name}の勝利`;
+        sub = s.endReason==='concede' ? `${s.players[Game.other(s.winner.id)].name}が投了した。` : '正体を見破られ、退場となった。';
+        palette=['var(--gold-light)','var(--gold)','var(--royal)']; if(typeof SFX!=='undefined') SFX.win();
+      } else {
+        title='引き分け'; sub='舞踏会は決着つかず幕を閉じた。'; palette=['var(--silver)','var(--ivory-dim)','var(--gold-dim)'];
+      }
+    } else if(s.winner && s.winner.id===0){ title='あなたの勝利'; sub='正体を隠し通し、王位を継承した。'; palette=['var(--gold-light)','var(--gold)','var(--royal)']; if(typeof SFX!=='undefined') SFX.win(); }
+    else if(s.winner && s.winner.id===1){
+      title=`${s.players[1].name}の勝利`;
+      sub = s.endReason==='concede' ? 'あなたは投了した。' : 'あなたの正体は見破られてしまった。';
+      palette=['var(--velvet-light)','var(--danger)','var(--gold-dim)']; if(typeof SFX!=='undefined') SFX.lose();
+    }
     else { title='引き分け'; sub='舞踏会は決着つかず幕を閉じた。'; palette=['var(--silver)','var(--ivory-dim)','var(--gold-dim)']; }
 
     const revealRow = s.players.map(p=>{
@@ -1307,18 +1530,18 @@ const UI = {
       </div>`;
     }).join('');
 
-    const st = Game.stats[Game.difficulty] || { streak:0, best:0, wins:0, losses:0, draws:0 };
-    let streakLine;
-    if(s.winner && s.winner.id===0 && st.streak>0){
-      streakLine = `<div class="result-streak win">${st.streak}連勝中！（自己ベスト ${st.best}連勝）</div>`;
-    } else if(s.winner && s.winner.id===1){
-      streakLine = st.best>0
-        ? `<div class="result-streak lose">連勝はここで途切れた（自己ベスト ${st.best}連勝）</div>`
-        : '';
-    } else {
-      streakLine = '';
+    let streakLine = '', recordLine = '';
+    if(!s.isLocal2p){
+      const st = Game.stats[Game.difficulty] || { streak:0, best:0, wins:0, losses:0, draws:0 };
+      if(s.winner && s.winner.id===0 && st.streak>0){
+        streakLine = `<div class="result-streak win">${st.streak}連勝中！（自己ベスト ${st.best}連勝）</div>`;
+      } else if(s.winner && s.winner.id===1){
+        streakLine = st.best>0
+          ? `<div class="result-streak lose">連勝はここで途切れた（自己ベスト ${st.best}連勝）</div>`
+          : '';
+      }
+      recordLine = `<div class="result-record">通算 ${st.wins}勝 ${st.losses}敗 ${st.draws}分</div>`;
     }
-    const recordLine = `<div class="result-record">通算 ${st.wins}勝 ${st.losses}敗 ${st.draws}分</div>`;
 
     box.innerHTML = `
       <div class="result-title">${title}</div>
@@ -1329,9 +1552,45 @@ const UI = {
       <div class="start-actions" style="margin-top:18px;">
         <button class="btn-grand" onclick="UI.restart()">もう一度舞踏会へ</button>
       </div>
+      <div class="start-actions" style="margin-top:10px;">
+        <button class="btn ghost" onclick="UI.shareResult()">結果を共有</button>
+      </div>
     `;
     overlay.classList.add('open');
     this.spawnBurstParticles(box, palette);
+  },
+
+  shareResult(){
+    const s = Game.state;
+    if(!s) return;
+    let text;
+    if(s.isLocal2p){
+      text = s.winner
+        ? `MASCARADE ―仮面領の一夜― で${s.winner.name}が勝利しました🎭 友達と対戦できるパス＆プレイ方式のカードゲームです。`
+        : `MASCARADE ―仮面領の一夜― は引き分けに終わりました🎭`;
+    } else {
+      const st = Game.stats[Game.difficulty] || { streak:0, best:0 };
+      if(s.winner && s.winner.id===0){
+        text = st.streak>1
+          ? `MASCARADE ―仮面領の一夜― で${st.streak}連勝中🎭 正体を隠し通せるか、挑んでみませんか？`
+          : `MASCARADE ―仮面領の一夜― で勝利しました🎭`;
+      } else if(s.winner && s.winner.id===1){
+        text = `MASCARADE ―仮面領の一夜― に挑戦中🎭 正体を隠し通せるか…？`;
+      } else {
+        text = `MASCARADE ―仮面領の一夜― で引き分けに終わりました🎭`;
+      }
+    }
+    if(typeof navigator!=='undefined' && navigator.share){
+      navigator.share({ title:'MASCARADE', text }).catch(()=>{});
+    } else if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(()=>{
+        UI.showToast('結果をコピーしました', 'info');
+      }).catch(()=>{
+        UI.showToast('共有に対応していない環境です', 'info');
+      });
+    } else {
+      UI.showToast('共有に対応していない環境です', 'info');
+    }
   },
 
   restart(){
@@ -1362,5 +1621,5 @@ if('serviceWorker' in navigator){
 
 /* テスト用フック（jsdomヘッドレステストから利用。通常のプレイには使用しない） */
 if(typeof window!=='undefined'){
-  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS };
+  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS };
 }
