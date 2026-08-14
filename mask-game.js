@@ -696,6 +696,7 @@ const UI = {
 
   initSplash(){
     this.buildSplashParticles();
+    this.buildSplashTitle();
     const loading = document.getElementById('splash-loading');
     const sub = document.getElementById('splash-sub');
     const btn = document.getElementById('splash-start-btn');
@@ -715,6 +716,16 @@ const UI = {
     }, 500);
 
     setTimeout(()=>{ clearInterval(captionTimer); reveal(); }, 1600);
+  },
+
+  buildSplashTitle(){
+    const el = document.getElementById('splash-title');
+    if(!el) return;
+    const text = 'MASCARADE';
+    const reduced = this.reducedMotion();
+    el.innerHTML = text.split('').map((ch,i)=>
+      `<span style="${reduced?'':`animation-delay:${(i*0.06).toFixed(2)}s`}">${ch}</span>`
+    ).join('');
   },
 
   buildSplashParticles(){

@@ -76,16 +76,6 @@ body.table-mode{ overflow:hidden; }
   .candle-glow{animation:none;}
 }
 
-.table-watermark{
-  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  font-size:min(72vw, 420px); opacity:0; z-index:0; pointer-events:none;
-  filter:blur(1px); transition:opacity 1.2s ease;
-  animation:watermarkBreathe 9s ease-in-out infinite;
-}
-body.table-mode .table-watermark{ opacity:.035; }
-@keyframes watermarkBreathe{ 0%,100%{ transform:translate(-50%,-50%) scale(1); } 50%{ transform:translate(-50%,-50%) scale(1.045); } }
-@media (prefers-reduced-motion: reduce){ .table-watermark{ animation:none; } }
-
 /* ---------- splash screen ---------- */
 #splash-screen{
   position:fixed; inset:0; z-index:200;
@@ -98,23 +88,36 @@ body.table-mode .table-watermark{ opacity:.035; }
 }
 #splash-screen.dismissed{ opacity:0; visibility:hidden; pointer-events:none; }
 .splash-particles{ position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
-.splash-logo-wrap{ position:relative; z-index:1; display:flex; align-items:center; justify-content:center; }
+.splash-logo-wrap{ position:relative; z-index:1; display:flex; align-items:center; justify-content:center; padding:0 12px; }
 .splash-logo-wrap::before{
-  content:''; position:absolute; inset:-18%; border-radius:50%;
+  content:''; position:absolute; inset:-30% -12%; border-radius:50%;
   background:radial-gradient(circle, rgba(201,162,39,0.35), transparent 68%);
   filter:blur(18px); animation:auraPulse 3.2s ease-in-out infinite;
 }
 @keyframes auraPulse{ 0%,100%{ opacity:.55; transform:scale(.94); } 50%{ opacity:.95; transform:scale(1.06); } }
-.splash-logo{
-  position:relative; width:min(58vw, 240px); border-radius:22px;
-  box-shadow:0 22px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,162,39,0.3);
-  animation:splashFloat 3.6s ease-in-out infinite;
+.splash-title{
+  position:relative; z-index:1; margin:0; text-align:center;
+  font-family:'Cormorant Garamond', serif; font-weight:600; font-style:italic;
+  font-size:clamp(38px,13vw,64px); letter-spacing:.05em;
+  background:linear-gradient(180deg, var(--gold-light), var(--gold) 55%, var(--gold-dim));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:titleGlow 3s ease-in-out infinite;
 }
-@keyframes splashFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-8px); } }
+.splash-title span{ display:inline-block; opacity:0; animation:letterRise .7s cubic-bezier(.2,.9,.3,1) forwards; }
+@keyframes letterRise{ from{ opacity:0; transform:translateY(18px); } to{ opacity:1; transform:translateY(0); } }
+@keyframes titleGlow{ 0%,100%{ filter:drop-shadow(0 0 16px rgba(201,162,39,0.35)); } 50%{ filter:drop-shadow(0 0 30px rgba(201,162,39,0.65)); } }
+.splash-subtitle{
+  position:relative; z-index:1; font-family:'Shippori Mincho',serif; font-size:14px; letter-spacing:.22em;
+  color:var(--gold-light); opacity:0; animation:fadeUp .7s ease .55s forwards; text-align:center;
+}
 .splash-divider{
   width:120px; height:1px; position:relative; overflow:hidden; z-index:1;
   background:linear-gradient(90deg, transparent, var(--gold), transparent);
   animation:shimmerLine 3.2s ease-in-out infinite;
+}
+.splash-divider .divider-gem{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(45deg);
+  width:6px; height:6px; background:var(--gold-light); box-shadow:0 0 8px rgba(232,205,115,0.8);
 }
 .splash-loading{ display:flex; gap:9px; height:10px; align-items:center; z-index:1; }
 .splash-loading span{ width:8px; height:8px; border-radius:50%; background:var(--gold); animation:dotPulse 1.2s ease-in-out infinite; }
@@ -125,7 +128,8 @@ body.table-mode .table-watermark{ opacity:.035; }
 .splash-start-btn{ display:none; z-index:1; }
 .splash-start-btn.show{ display:inline-block; animation:fadeUp .5s ease both; }
 @media (prefers-reduced-motion: reduce){
-  .splash-logo{ animation:none; }
+  .splash-title{ animation:none; }
+  .splash-title span{ opacity:1; animation:none; }
   .splash-logo-wrap::before{ animation:none; }
   .splash-divider{ animation:none; }
   .splash-loading span{ animation:none; opacity:.6; }
@@ -138,27 +142,27 @@ body.table-mode #app{ height:100dvh; padding-bottom:6px; overflow:hidden; }
 
 /* ---------- header ---------- */
 header.top{
-  text-align:center; padding:26px 10px 16px; position:relative; flex:0 0 auto;
+  text-align:center; padding:16px 10px 10px; position:relative; flex:0 0 auto;
   transition:padding .25s ease;
 }
 header.top .eyebrow{
-  letter-spacing:.35em; font-size:11px; color:var(--gold); text-transform:uppercase; opacity:0;
+  letter-spacing:.35em; font-size:10px; color:var(--gold); text-transform:uppercase; opacity:0;
   animation:fadeUp .7s ease .05s forwards;
 }
 header.top h1{
   font-family:'Cormorant Garamond', serif; font-weight:600; font-style:italic;
-  font-size:clamp(30px,7vw,44px); margin:4px 0 2px; letter-spacing:.04em;
+  font-size:clamp(28px,7vw,38px); margin:2px 0 1px; letter-spacing:.04em;
   background:linear-gradient(180deg, var(--gold-light), var(--gold) 60%, var(--gold-dim));
   -webkit-background-clip:text; background-clip:text; color:transparent;
   text-shadow:0 0 26px rgba(201,162,39,0.25);
   opacity:0; animation:fadeUp .8s ease .18s forwards;
   transition:font-size .25s ease;
 }
-header.top .subtitle{ font-family:'Shippori Mincho',serif; font-size:14px; letter-spacing:.18em; color:var(--ivory-dim);
+header.top .subtitle{ font-family:'Shippori Mincho',serif; font-size:12.5px; letter-spacing:.16em; color:var(--ivory-dim);
   opacity:0; animation:fadeUp .8s ease .32s forwards;
 }
 header.top .divider{
-  width:140px; height:1px; margin:14px auto 0; position:relative; overflow:hidden;
+  width:110px; height:1px; margin:8px auto 0; position:relative; overflow:hidden;
   background:linear-gradient(90deg, transparent, var(--gold), transparent); opacity:0;
   animation:fadeUp .8s ease .46s forwards, shimmerLine 3.4s ease-in-out 1.3s infinite;
 }
@@ -176,11 +180,11 @@ header.top.compact .divider{ display:none; }
 header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 
 /* ---------- start screen ---------- */
-#start-screen{ padding:10px 6px 30px; flex:1 1 auto; overflow-y:auto; }
-.lede{ font-size:14.5px; line-height:1.9; color:var(--ivory-dim); text-align:center; max-width:520px; margin:18px auto 26px; }
+#start-screen{ padding:6px 6px 10px; flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; justify-content:flex-start; }
+.lede{ font-size:13px; line-height:1.65; color:var(--ivory-dim); text-align:center; max-width:480px; margin:6px auto 12px; }
 .lede b{ color:var(--gold-light); font-weight:700; }
 
-.rules-toggle-wrap{ text-align:center; margin-bottom:18px; }
+.rules-toggle-wrap{ text-align:center; margin-bottom:8px; }
 .link-btn{
   background:none; border:none; color:var(--gold); font-family:'Zen Maru Gothic',sans-serif;
   font-size:13px; letter-spacing:.06em; cursor:pointer; border-bottom:1px dotted var(--gold-dim); padding:2px 4px;
@@ -200,7 +204,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .rule-text .rd{ font-size:12px; color:var(--ivory-dim); margin-top:2px; line-height:1.6; }
 .rule-count{ flex:0 0 auto; font-size:11px; color:var(--gold-dim); font-family:'Cormorant Garamond',serif; padding-top:6px;}
 
-.start-actions{ text-align:center; margin-top:8px; }
+.start-actions{ text-align:center; margin-top:10px; }
 .btn-grand{
   font-family:'Shippori Mincho',serif; font-size:16px; letter-spacing:.14em;
   background:linear-gradient(180deg, var(--gold-light), var(--gold) 70%);
@@ -220,8 +224,8 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 @keyframes grandGlow{ 0%,100%{ box-shadow:0 6px 22px rgba(201,162,39,0.35), inset 0 1px 0 rgba(255,255,255,0.5); } 50%{ box-shadow:0 6px 30px rgba(201,162,39,0.6), inset 0 1px 0 rgba(255,255,255,0.6); } }
 @media (prefers-reduced-motion: reduce){ .btn-grand{ animation:none; } .btn-grand::after{ display:none; } }
 
-.difficulty-wrap{ text-align:center; margin:22px 0 14px; }
-.difficulty-label{ font-size:11px; letter-spacing:.18em; color:var(--gold-dim); margin-bottom:10px; font-family:'Shippori Mincho',serif; }
+.difficulty-wrap{ text-align:center; margin:12px 0 8px; }
+.difficulty-label{ font-size:10.5px; letter-spacing:.16em; color:var(--gold-dim); margin-bottom:8px; font-family:'Shippori Mincho',serif; }
 .difficulty-row{ display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
 .diff-btn{
   font-family:'Zen Maru Gothic',sans-serif; font-size:12.5px; letter-spacing:.03em;
@@ -233,12 +237,12 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   background:linear-gradient(180deg, var(--gold-light), var(--gold) 75%); color:var(--ink); font-weight:700; border-color:transparent;
   box-shadow:0 4px 14px rgba(201,162,39,0.35);
 }
-.difficulty-epithet{ font-size:11.5px; color:var(--ivory-dim); margin-top:10px; min-height:1.4em; font-style:italic; }
+.difficulty-epithet{ font-size:11px; color:var(--ivory-dim); margin-top:6px; min-height:1.3em; font-style:italic; }
 .stats-panel{
-  display:flex; justify-content:center; align-items:center; gap:12px; flex-wrap:wrap;
-  margin-top:12px; padding:8px 14px; border-radius:999px;
+  display:flex; justify-content:center; align-items:center; gap:10px; flex-wrap:wrap;
+  margin-top:8px; padding:6px 12px; border-radius:999px;
   background:rgba(255,255,255,0.04); border:1px solid rgba(201,162,39,0.2);
-  font-size:11.5px; color:var(--ivory-dim); min-height:1.6em;
+  font-size:10.5px; color:var(--ivory-dim); min-height:1.5em;
 }
 .stats-panel .stats-empty{ opacity:.7; }
 .stats-panel .stats-record{ color:var(--ivory); }
@@ -318,9 +322,9 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 }
 @media (prefers-reduced-motion: reduce){ .zone.elim-flash{ animation:none; } }
 
-.hand-area{ display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; min-height:clamp(70px,18vh,140px); align-items:center; }
+.hand-area{ display:flex; gap:12px; margin-top:8px; align-items:center; justify-content:center; }
 .card{
-  width:clamp(64px,19vw,96px); aspect-ratio:300/505; border-radius:9px; position:relative; flex:0 0 auto;
+  width:128px; flex:0 0 auto; aspect-ratio:300/505; border-radius:10px; position:relative;
   overflow:hidden;
   /* すべてのカードで統一した縁デザイン（"王家の輝き"）。数字によって縁の色を変えると、
      ちらっと見ただけで相手に手札の強さを悟られてしまうため、価値に関わらず全カード同じ縁にしている */
@@ -341,7 +345,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 @media (prefers-reduced-motion: reduce){ .card.selectable{ animation:none; } .card{ animation:none; } }
 
 .card-back{
-  width:clamp(46px,13vw,66px); aspect-ratio:300/505; border-radius:9px; flex:0 0 auto;
+  width:96px; flex:0 0 auto; aspect-ratio:300/505; border-radius:9px;
   background:
     radial-gradient(circle at 50% 42%, rgba(201,162,39,0.35) 0%, transparent 45%),
     repeating-linear-gradient(45deg, #241a3e 0 6px, #1a1330 6px 12px);
@@ -350,7 +354,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   box-shadow:0 3px 8px rgba(0,0,0,0.4);
   animation:dealIn .35s ease both;
 }
-.card-back .mask-icon{ font-size:20px; opacity:.7; filter:drop-shadow(0 0 3px rgba(232,205,115,0.4)); }
+.card-back .mask-icon{ font-size:26px; opacity:.7; filter:drop-shadow(0 0 3px rgba(232,205,115,0.4)); }
 .card-back.thinking{ animation:dealIn .35s ease both, thinkPulse 1.3s ease-in-out infinite; }
 @keyframes thinkPulse{
   0%,100%{ box-shadow:0 3px 8px rgba(0,0,0,0.4); border-color:var(--gold-dim); }
@@ -524,7 +528,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 #gameover-overlay .reveal-row:nth-child(3){ animation-delay:.24s; }
 @media (prefers-reduced-motion: reduce){ #gameover-overlay .result-title{ animation:none; } #gameover-overlay .reveal-row{ animation:none; } }
 
-footer.credits{ text-align:center; font-size:10.5px; color:#544a3f; margin-top:30px; letter-spacing:.08em; flex:0 0 auto; }
+footer.credits{ text-align:center; font-size:9.5px; color:#544a3f; margin-top:12px; letter-spacing:.08em; flex:0 0 auto; }
 body.table-mode footer.credits{ display:none; }
 
 @media (max-width:420px){
@@ -535,15 +539,15 @@ body.table-mode footer.credits{ display:none; }
 </head>
 <body>
 <div class="sparkle-layer" id="sparkle-layer"></div>
-<div class="table-watermark" aria-hidden="true">🎭</div>
 
 <!-- ============ SPLASH SCREEN ============ -->
 <div id="splash-screen">
   <div class="splash-particles" id="splash-particles"></div>
   <div class="splash-logo-wrap">
-    <img class="splash-logo" src="./icon-512.png" alt="MASCARADE">
+    <h1 class="splash-title" id="splash-title"></h1>
   </div>
-  <div class="splash-divider"></div>
+  <div class="splash-subtitle">仮面領の一夜</div>
+  <div class="splash-divider"><span class="divider-gem"></span></div>
   <div class="splash-loading" id="splash-loading">
     <span></span><span></span><span></span>
   </div>
@@ -555,17 +559,15 @@ body.table-mode footer.credits{ display:none; }
   <header class="top" id="site-header">
     <div class="eyebrow">仮面領の一夜</div>
     <h1>MASCARADE</h1>
-    <div class="subtitle">―マスカラード―　王位継承を賭けた、一夜限りの舞踏会</div>
+    <div class="subtitle">―マスカレード―　王位継承を賭けた、一夜限りの舞踏会</div>
     <div class="divider"></div>
   </header>
 
   <!-- ============ START SCREEN ============ -->
   <div id="start-screen">
     <p class="lede">
-      仮面舞踏会を意味するその名の通り――<b>MASCARADE</b>。今宵、仮面領で催される一夜限りの舞踏会。<br><br>
-      正体を隠したまま王位を競う一夜。手札はただ<b>1枚</b>、今宵だけ纏う仮面そのもの。山札から引き、2枚のうちどちらかを場に出せば、仮面はその力を解き放つ。<br><br>
-      宣言、覗き見、交換、対決――繰り出す仮面ひとつひとつが、真実と虚偽の境界線になる。<br>
-      相手の正体を読み切り、最後まで舞踏会に残った者だけが、王座に辿り着く。
+      正体を隠したまま王位を競う、一夜限りの仮面舞踏会。手札はただ<b>1枚</b>。山札から引き、2枚のうち1枚を場に出せば、その仮面の力が解き放たれる。<br>
+      相手の正体を読み切り、最後まで舞踏会に残った者が王座に辿り着く。
     </p>
     <div class="rules-toggle-wrap">
       <button class="link-btn" id="rules-toggle-btn" onclick="UI.toggleRules()">▾ 仮面の一覧とルールを見る</button>
