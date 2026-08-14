@@ -1,11 +1,11 @@
 'use strict';
 /*
- * LARVA（ラルファ）― Service Worker
+ * MASCARADE ― Service Worker
  * 静的アセットをキャッシュし、オフラインでも起動・プレイできるようにする。
  * ファイルを更新したら CACHE_NAME のバージョンを必ず上げること
  * （上げ忘れるとブラウザが古いキャッシュを返し続け、「直したはずなのに直っていない」事故につながる）。
  */
-const CACHE_NAME = 'larva-cache-v4';
+const CACHE_NAME = 'mascarade-cache-v1';
 
 // カード画像は mask-game.js 内にBase64で埋め込み済みのため、
 // 個別のcards/以下の画像はプリキャッシュ対象に含めない
