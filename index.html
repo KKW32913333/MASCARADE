@@ -143,9 +143,11 @@ body.table-mode{ overflow:hidden; }
   position:relative; z-index:1; margin:0; text-align:center;
   font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:600;
   font-size:clamp(40px,13vw,74px); letter-spacing:.05em;
+  color:#d9ad3f;
   background:linear-gradient(120deg, #ab9048 0%, #f5dd8f 25%, #d9ad3f 50%, #f5dd8f 75%, #ab9048 100%);
   background-size:220% auto;
-  -webkit-background-clip:text; background-clip:text; color:transparent;
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:transparent;
   text-shadow:0 0 34px rgba(217,173,63,0.45);
   animation:titleSweep 5s linear infinite;
 }
@@ -165,7 +167,6 @@ body.table-mode{ overflow:hidden; }
 .splash-progress{
   width:min(58vw, 190px); height:4px; border-radius:999px; overflow:hidden;
   background:rgba(255,255,255,0.12); border:1px solid rgba(217,173,63,0.3);
-  opacity:0; animation:fadeUp .8s ease 1.3s forwards;
 }
 .splash-progress-fill{
   height:100%; width:0%; border-radius:999px;
@@ -175,7 +176,7 @@ body.table-mode{ overflow:hidden; }
 }
 .splash-sub{
   font-size:11.5px; letter-spacing:.14em; color:#cdc3e6; font-family:'Shippori Mincho',serif;
-  min-height:1.4em; opacity:0; animation:fadeUp .8s ease 1.4s forwards; transition:opacity .3s ease;
+  min-height:1.4em; transition:opacity .3s ease;
 }
 @media (prefers-reduced-motion: reduce){
   #splash-screen{ animation:none; }
@@ -326,6 +327,28 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .stats-panel .stats-streak{ color:var(--gold-dim); font-weight:600; }
 .stats-panel .stats-streak.off{ color:var(--ivory-dim); font-weight:400; opacity:.7; }
 .stats-panel .stats-best{ color:var(--gold-dim); }
+
+/* ---------- オンライン対戦パネル ---------- */
+.online-panel{ display:flex; flex-direction:column; gap:12px; align-items:center; padding-top:4px; }
+.online-choice-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; width:100%; }
+.online-join-row{ display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
+.online-code-input{
+  font-family:'Cormorant Garamond',serif; font-size:19px; letter-spacing:.2em; text-align:center;
+  text-transform:uppercase; width:130px; padding:9px 10px; border-radius:10px;
+  border:1px solid rgba(184,134,11,0.4); background:rgba(184,134,11,0.05); color:var(--ivory);
+}
+.online-code-input::placeholder{ color:var(--ivory-dim); letter-spacing:.1em; }
+.online-code-display{
+  font-family:'Cormorant Garamond',serif; font-size:32px; letter-spacing:.28em; font-weight:600;
+  color:var(--gold-dim); text-align:center; padding:6px 0;
+}
+.online-status-text{ font-size:12.5px; color:var(--ivory-dim); text-align:center; line-height:1.7; }
+.online-waiting-dot{ display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--gold); margin:0 2px; animation:onlinePulse 1.4s ease-in-out infinite; }
+.online-waiting-dot:nth-child(2){ animation-delay:.2s; }
+.online-waiting-dot:nth-child(3){ animation-delay:.4s; }
+@keyframes onlinePulse{ 0%,100%{ opacity:.3; } 50%{ opacity:1; } }
+.online-error{ color:var(--danger); font-size:12px; text-align:center; }
+@media (prefers-reduced-motion: reduce){ .online-waiting-dot{ animation:none; opacity:.7; } }
 
 /* ---------- table ---------- */
 #table{ display:none; }
@@ -608,14 +631,6 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 }
 .help-close:hover{ color:var(--ivory); background:rgba(184,134,11,0.10); }
 
-/* ---------- handoff（手番受け渡し）画面 ---------- */
-.handoff-overlay{ z-index:80; background:rgba(5,4,10,0.94); backdrop-filter:blur(3px); }
-.handoff-box{ max-width:340px; }
-.handoff-icon{ font-size:44px; margin-bottom:8px; animation:handoffFloat 2.4s ease-in-out infinite; }
-@keyframes handoffFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
-.handoff-box h3{ font-family:'Shippori Mincho',serif; color:var(--gold-dim); font-size:19px; margin:0 0 10px; letter-spacing:.05em; }
-.handoff-sub{ font-size:13px; line-height:1.8; color:var(--ivory-dim); margin:0 0 20px; }
-@media (prefers-reduced-motion: reduce){ .handoff-icon{ animation:none; } }
 
 /* ---------- game over ---------- */
 #gameover-overlay .modal-box{ max-width:400px; }
@@ -740,7 +755,12 @@ body.table-mode footer.credits{ display:none; }
       <div class="stats-panel" id="stats-panel"></div>
     </div>
 
-    <div class="start-actions">
+    <div class="difficulty-wrap" id="online-wrap" style="display:none;">
+      <div class="difficulty-label">オンライン対戦</div>
+      <div id="online-panel"></div>
+    </div>
+
+    <div class="start-actions" id="start-actions-cpu">
       <button class="btn-grand" onclick="Game.newGame()">舞踏会をはじめる</button>
     </div>
 
@@ -819,16 +839,12 @@ body.table-mode footer.credits{ display:none; }
   <div class="modal-box help-box" id="discard-box"></div>
 </div>
 
-<!-- ローカル2人対戦：手番受け渡し画面 -->
-<div class="modal-overlay handoff-overlay" id="handoff-overlay">
-  <div class="modal-box handoff-box">
-    <div class="handoff-icon">🎭</div>
-    <h3 id="handoff-title">次の番です</h3>
-    <p class="handoff-sub">スマホを渡してください。<br>準備ができたら下のボタンを押してください。</p>
-    <button class="btn-grand" onclick="UI.confirmHandoff()">見る準備ができました</button>
-  </div>
-</div>
-
+<!-- Firebase（オンライン対戦用）。firebase-app / firebase-auth / firebase-firestore の compat 版を使用。
+     利用するには、ご自身の Firebase プロジェクトを用意し、下の mask-game.js 内 firebaseConfig に
+     ご自身のプロジェクトの設定値を貼り付けてください（詳しくは README.md を参照）。 -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="mask-game.js"></script>
 </body>
 </html>

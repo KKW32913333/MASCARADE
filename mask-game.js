@@ -94,13 +94,13 @@ const DIFFICULTY_DEFS = {
 const DIFFICULTY_ORDER = ['novice','courtier','wily'];
 
 /* ---------------------------------------------------------------------
- * 2b-2. 対戦形式定義（CPU戦 / ローカル2人対戦）
+ * 2b-2. 対戦形式定義（CPU戦 / オンライン対戦）
  * ------------------------------------------------------------------- */
 const MODE_DEFS = {
-  cpu:     { id:'cpu',     label:'CPU対戦',   epithet:'仮面卿と、腕試しの一夜を。' },
-  local2p: { id:'local2p', label:'友達と対戦', epithet:'1台のスマホを手渡しながら遊ぶ、パス＆プレイ形式。' },
+  cpu:    { id:'cpu',    label:'CPU対戦',     epithet:'仮面卿と、腕試しの一夜を。' },
+  online: { id:'online', label:'オンライン対戦', epithet:'合言葉を交換して、誰かと一夜を。' },
 };
-const MODE_ORDER = ['cpu','local2p'];
+const MODE_ORDER = ['cpu','online'];
 
 /* ---------------------------------------------------------------------
  * 2c. 戦績（連勝）の永続化
@@ -200,83 +200,76 @@ const Game = {
   state: null,
   difficulty: (()=>{ const d = loadLastDifficulty(); return DIFFICULTY_DEFS[d] ? d : 'courtier'; })(),
   stats: loadStats(),
-  mode: 'cpu', // 'cpu' | 'local2p'
+  mode: 'cpu', // 'cpu' | 'online'
 
   setDifficulty(id){
     if(DIFFICULTY_DEFS[id]){ this.difficulty = id; saveLastDifficulty(id); }
   },
 
   setMode(m){
-    if(m==='cpu' || m==='local2p') this.mode = m;
+    if(m==='cpu' || m==='online') this.mode = m;
   },
 
-  newGame(){
-    // 自分・対戦相手、それぞれが独立した山札を持つ（構成は同じでも並びは別々にシャッフルされる）
+  // 山札・手札一式を新しく組み立てる（CPU戦、およびオンライン対戦のホスト側での部屋作成の両方から使う）
+  buildFreshState(playerNames){
     const deckA = buildFreshDeck();
     const deckB = buildFreshDeck();
     const removedA = deckA.pop(); // 転生札（誰にも見えない1枚、裏向きで除外）
     const removedB = deckB.pop();
-    const decks = [deckA, deckB];
-    const removedCards = [removedA, removedB];
-    const forceCPU = (typeof window!=='undefined' && window.__TEST_FORCE_CPU); // ヘッドレステスト専用フック
-    const isLocal2p = this.mode === 'local2p';
-    const diff = DIFFICULTY_DEFS[this.difficulty] || DIFFICULTY_DEFS.courtier;
-    CPU.rangeMemory = {}; // 前の対戦の記憶を持ち越さない
-    CPU.bottomMemory = null;
-    CPU.exactMemory = {};
-    const players = isLocal2p ? [
-      { id:0, name:'プレイヤー1', isCPU:false, hand:[deckA.pop()], alive:true, protectedFlag:false, discard:[] },
-      { id:1, name:'プレイヤー2', isCPU:false, hand:[deckB.pop()], alive:true, protectedFlag:false, discard:[] },
-    ] : [
-      { id:0, name:'あなた', isCPU: !!forceCPU, hand:[deckA.pop()], alive:true, protectedFlag:false, discard:[] },
-      { id:1, name:diff.label, isCPU:true,  hand:[deckB.pop()], alive:true, protectedFlag:false, discard:[] },
+    const players = [
+      { id:0, name:playerNames[0], isCPU:false, hand:[deckA.pop()], alive:true, protectedFlag:false, discard:[] },
+      { id:1, name:playerNames[1], isCPU:false, hand:[deckB.pop()], alive:true, protectedFlag:false, discard:[] },
     ];
-    this.state = {
-      decks, removedCards,
+    return {
+      decks:[deckA, deckB], removedCards:[removedA, removedB],
       players,
-      isLocal2p,
       turnIndex: Math.random()<0.5 ? 0 : 1,
       turnCount: 0,
       log: [],
-      phase: 'idle',       // idle | choose | resolve | over | handoff
+      phase: 'idle',       // idle | choose | resolve | over
       pendingCard: null,   // 選択済みだが未解決のカードID（対象/数字待ち）
       gameOver: false,
       winner: null,
       endReason: null,
     };
+  },
+
+  newGame(){
+    // CPU戦のみここから直接始まる（オンライン対戦は Online.createRoom() / Online.joinRoom() 経由）
+    const forceCPU = (typeof window!=='undefined' && window.__TEST_FORCE_CPU); // ヘッドレステスト専用フック
+    const diff = DIFFICULTY_DEFS[this.difficulty] || DIFFICULTY_DEFS.courtier;
+    CPU.rangeMemory = {}; // 前の対戦の記憶を持ち越さない
+    CPU.bottomMemory = null;
+    CPU.exactMemory = {};
+    const state = this.buildFreshState(['あなた', diff.label]);
+    state.players[0].isCPU = !!forceCPU;
+    state.players[1].isCPU = true;
+    state.isOnline = false;
+    state.myIdx = 0;
+    this.state = state;
     UI.showTable();
-    this.addLog(`舞踏会の幕が上がる。両者の山札からそれぞれ1枚が「転生札」として裏向きに除外された。最初の番は「${players[this.state.turnIndex].name}」。`, true);
+    this.addLog(`舞踏会の幕が上がる。両者の山札からそれぞれ1枚が「転生札」として裏向きに除外された。最初の番は「${state.players[state.turnIndex].name}」。`, true);
     UI.render();
     // 最初の手番は、スタート画面から今まさに操作していた人が続けて見るので受け渡し演出は不要
-    this.startTurn({skipHandoff:true});
+    this.startTurn();
   },
 
   addLog(text, isTurnHeader){
     this.state.log.push({ text, header: !!isTurnHeader });
   },
 
-  me(){ return this.state.players[0]; },
-  opp(){ return this.state.players[1]; },
+  me(){ return this.state.players[this.state.myIdx || 0]; },
+  opp(){ return this.state.players[Game.other(this.state.myIdx || 0)]; },
   other(idx){ return idx===0?1:0; },
   playerAt(idx){ return this.state.players[idx]; },
 
-  startTurn(opts){
-    opts = opts || {};
+  startTurn(){
     const s = this.state;
     if(!s || s.gameOver) return;
 
     // 自分の山札が尽きた場合はここでゲーム終了（比べ合い）
     if(s.decks[s.turnIndex].length===0){
       this.endGameByShowdown();
-      return;
-    }
-
-    // ローカル2人対戦では、最初のターンを除き手番が変わるたびに
-    // 「スマホを渡してください」の受け渡し画面を挟んでから手札を見せる
-    if(s.isLocal2p && !opts.skipHandoff){
-      s.phase = 'handoff';
-      const p = s.players[s.turnIndex];
-      if(typeof UI!=='undefined' && UI.showHandoff) UI.showHandoff(p.name);
       return;
     }
 
@@ -692,7 +685,7 @@ const Game = {
   // 現在選択中の難易度に対する戦績（勝敗・連勝）を更新して保存する
   recordResult(){
     const s = this.state;
-    if(s.isLocal2p) return; // ローカル2人対戦は難易度別の戦績には含めない
+    if(s.isOnline) return; // オンライン対戦は難易度別の戦績には含めない
     const st = ensureDiffStats(this.stats, this.difficulty);
     st.played++;
     if(s.winner && s.winner.id===0){
@@ -705,11 +698,11 @@ const Game = {
     saveStats(this.stats);
   },
 
-  // 投了する（CPU戦では常にプレイヤー0、ローカル2人対戦では今の手番の側）
+  // 投了する（自分の枠＝myIdxが常に投了者。相手の番でもいつでも投了できる）
   concede(){
     const s = this.state;
     if(!s || s.gameOver) return;
-    const concederIdx = s.isLocal2p ? s.turnIndex : 0;
+    const concederIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
     const winnerIdx = this.other(concederIdx);
     const conceder = this.playerAt(concederIdx);
     const winner = this.playerAt(winnerIdx);
@@ -852,6 +845,240 @@ const CPU = {
 };
 
 /* ---------------------------------------------------------------------
+ * 4b. オンライン対戦（Firebase Firestore）
+ * ------------------------------------------------------------------- */
+/*
+ * 【重要：ご自身のFirebaseプロジェクトが必要です】
+ * 下の firebaseConfig に、ご自身の Firebase プロジェクトの設定値を貼り付けてください。
+ * 設定方法・必要なFirestoreセキュリティルールは README.md を参照してください。
+ *
+ * 【この実装の設計方針について】
+ * 対戦相手の手札を本当の意味で秘匿する（サーバー側だけが両者の手札を見られる）には
+ * Cloud Functions 等の有料プランの仕組みが必要になります。今回はクライアントのみで
+ * 完結する構成（Firestoreの無料枠内）を優先し、「部屋の参加者2人だけが読み書きできる」
+ * という Firestore のセキュリティルールで保護しつつ、画面上は相手の手札を表示しない
+ * という設計にしています。つまり、開発者ツール等でネットワーク通信を覗けば理論上は
+ * 相手の手札を先に知ることも可能です（このゲームがこれまで採用していた「1台のスマホの
+ * 受け渡し」方式が性善説に頼っていたのと同種の前提です）。カジュアルに友人と遊ぶ用途を
+ * 想定した割り切りですので、ご了承ください。
+ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+
+const ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 紛らわしい 0/O・1/I/L を除外
+function generateRoomCode(len){
+  len = len || 5;
+  let code = '';
+  for(let i=0;i<len;i++) code += ROOM_CODE_CHARS[Math.floor(Math.random()*ROOM_CODE_CHARS.length)];
+  return code;
+}
+
+const Online = {
+  db: null,
+  uid: null,
+  roomCode: null,
+  role: null,        // 'host' | 'guest'
+  unsubscribe: null,
+  panelState: 'idle', // 'idle' | 'creating' | 'waiting' | 'joining' | 'error'
+  errorMsg: '',
+  syncTimer: null,
+  ready: false,       // Firebase初期化＋匿名サインインが完了したか
+
+  isConfigured(){
+    return firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY';
+  },
+
+  // Firebaseの初期化と匿名サインインを行う（初回のみ）。完了したらcallbackを呼ぶ。
+  ensureReady(callback){
+    if(this.ready){ callback(); return; }
+    if(typeof firebase==='undefined' || !this.isConfigured()){
+      this.panelState = 'error';
+      this.errorMsg = 'firebaseConfig が未設定です。README.md の手順に従い、ご自身のFirebaseプロジェクトの設定値を貼り付けてください。';
+      UI.renderOnlinePanel();
+      return;
+    }
+    try{
+      if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      this.db = firebase.firestore();
+      firebase.auth().onAuthStateChanged((user)=>{
+        if(user){
+          this.uid = user.uid;
+          this.ready = true;
+          callback();
+        }
+      });
+      firebase.auth().signInAnonymously().catch((err)=>{
+        this.panelState = 'error';
+        this.errorMsg = `サインインに失敗しました（${err.code || err.message}）。匿名認証が有効になっているか確認してください。`;
+        UI.renderOnlinePanel();
+      });
+    } catch(err){
+      this.panelState = 'error';
+      this.errorMsg = `Firebaseの初期化に失敗しました（${err.message}）。`;
+      UI.renderOnlinePanel();
+    }
+  },
+
+  startCreate(){
+    this.panelState = 'creating';
+    this.errorMsg = '';
+    UI.renderOnlinePanel();
+    this.ensureReady(()=>this._createRoom());
+  },
+
+  _createRoom(){
+    const code = generateRoomCode();
+    CPU.rangeMemory = {}; CPU.bottomMemory = null; CPU.exactMemory = {};
+    // 名前は視点に依存しない共通の呼び名にしておく（「あなた」表記は各端末側の描画だけで行う）
+    const state = Game.buildFreshState(['プレイヤー1','プレイヤー2']);
+    this.db.collection('rooms').doc(code).set({
+      hostUid: this.uid,
+      guestUid: null,
+      status: 'waiting',
+      state,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }).then(()=>{
+      this.roomCode = code;
+      this.role = 'host';
+      this.panelState = 'waiting';
+      UI.renderOnlinePanel();
+      this._listen(code);
+    }).catch((err)=>{
+      this.panelState = 'error';
+      this.errorMsg = `部屋の作成に失敗しました（${err.code || err.message}）。`;
+      UI.renderOnlinePanel();
+    });
+  },
+
+  startJoin(codeInput){
+    const code = (codeInput || '').trim().toUpperCase();
+    if(!code){ return; }
+    this.panelState = 'joining';
+    this.errorMsg = '';
+    UI.renderOnlinePanel();
+    this.ensureReady(()=>this._joinRoom(code));
+  },
+
+  _joinRoom(code){
+    const ref = this.db.collection('rooms').doc(code);
+    ref.get().then((doc)=>{
+      if(!doc.exists){
+        this.panelState = 'error';
+        this.errorMsg = `合言葉「${code}」の部屋が見つかりませんでした。`;
+        UI.renderOnlinePanel();
+        return;
+      }
+      const data = doc.data();
+      if(data.status !== 'waiting' || data.guestUid){
+        this.panelState = 'error';
+        this.errorMsg = 'この部屋はすでに満員か、対戦が終了しています。';
+        UI.renderOnlinePanel();
+        return;
+      }
+      // 参加者側は名前を書き換えない（両者で共有する1つのデータなので、視点による表記ゆれを持ち込まない）
+      return ref.update({
+        guestUid: this.uid,
+        status: 'playing',
+        updatedAt: Date.now(),
+      }).then(()=>{
+        this.roomCode = code;
+        this.role = 'guest';
+        this._listen(code);
+      });
+    }).catch((err)=>{
+      this.panelState = 'error';
+      this.errorMsg = `参加に失敗しました（${err.code || err.message}）。`;
+      UI.renderOnlinePanel();
+    });
+  },
+
+  _listen(code){
+    if(this.unsubscribe) this.unsubscribe();
+    this.unsubscribe = this.db.collection('rooms').doc(code).onSnapshot((doc)=>{
+      if(!doc.exists) return;
+      const data = doc.data();
+      if(data.status==='playing' && data.hostUid && data.guestUid){
+        this._enterGame(data);
+      } else if(data.status==='waiting'){
+        this.panelState = 'waiting';
+        UI.renderOnlinePanel();
+      }
+    }, (err)=>{
+      this.panelState = 'error';
+      this.errorMsg = `接続エラーが発生しました（${err.code || err.message}）。`;
+      UI.renderOnlinePanel();
+    });
+  },
+
+  // 部屋のFirestoreデータを Game.state に反映する（ゲスト参加を検知した直後、および以降の同期受信の両方で使う）
+  _enterGame(data){
+    Game._applyingRemote = true;
+    const myIdx = this.role === 'host' ? 0 : 1;
+    Game.state = Object.assign({}, data.state, { isOnline:true, myIdx });
+    if(Game.state.phase==='idle'){
+      // ホスト側：ゲストが参加した瞬間、最初のターンを開始してから同期する
+      if(this.role==='host'){
+        Game._applyingRemote = false;
+        UI.showTable();
+        Game.addLog(`舞踏会の幕が上がる。両者の山札からそれぞれ1枚が「転生札」として裏向きに除外された。最初の番は「${Game.state.players[Game.state.turnIndex].name}」。`, true);
+        UI.render();
+        Game.startTurn();
+        return;
+      }
+    }
+    if(!document.getElementById('table').classList.contains('open')) UI.showTable();
+    UI.render();
+    Game._applyingRemote = false;
+  },
+
+  // 自分の操作でGame.stateが変化した時、少し間を置いてFirestoreへ書き戻す（連続書き込みをまとめる）
+  scheduleSync(){
+    if(!this.roomCode || !this.db) return;
+    clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(()=>this._pushState(), 150);
+  },
+
+  _pushState(){
+    if(!this.roomCode || !this.db || !Game.state) return;
+    const clean = Object.assign({}, Game.state);
+    delete clean.isOnline;
+    delete clean.myIdx;
+    this.db.collection('rooms').doc(this.roomCode).update({
+      state: clean,
+      status: Game.state.gameOver ? 'over' : 'playing',
+      updatedAt: Date.now(),
+    }).catch((err)=>{
+      if(typeof UI!=='undefined' && UI.showToast) UI.showToast('通信エラー：相手に伝わっていない可能性があります', 'danger');
+      console.error('online sync failed', err);
+    });
+  },
+
+  leaveRoom(){
+    if(this.unsubscribe){ this.unsubscribe(); this.unsubscribe = null; }
+    if(this.roomCode && this.db){
+      this.db.collection('rooms').doc(this.roomCode).update({ status:'abandoned', updatedAt: Date.now() }).catch(()=>{});
+    }
+    this.roomCode = null;
+    this.role = null;
+    this.panelState = 'idle';
+    this.errorMsg = '';
+  },
+
+  resetPanel(){
+    this.panelState = 'idle';
+    this.errorMsg = '';
+    UI.renderOnlinePanel();
+  },
+};
+
+/* ---------------------------------------------------------------------
  * 5. UI 描画
  * ------------------------------------------------------------------- */
 const UI = {
@@ -940,8 +1167,11 @@ const UI = {
       }, 180);
     };
     setMessage();
+    // 二重rAFで「0%が確実に1フレーム描画されてから100%へ」変化させる。
+    // 単発のrAFだと、特にモバイル端末でスタイル変更がまとめて適用され、
+    // 遷移（transition）がアニメーションせずに一瞬で完了扱いになることがあるための対策。
     const raf = (typeof window!=='undefined' && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (fn)=>setTimeout(fn, 16);
-    raf(()=>{ fill.style.width = '100%'; });
+    raf(()=>{ raf(()=>{ if(fill) fill.style.width = '100%'; }); });
     const interval = setInterval(()=>{
       step++;
       if(step >= messages.length){ clearInterval(interval); return; }
@@ -996,7 +1226,66 @@ const UI = {
 
   updateModeVisibility(){
     const diffWrap = document.getElementById('difficulty-wrap');
-    if(diffWrap) diffWrap.style.display = (Game.mode==='local2p') ? 'none' : '';
+    const onlineWrap = document.getElementById('online-wrap');
+    const startActions = document.getElementById('start-actions-cpu');
+    const isOnline = Game.mode === 'online';
+    if(diffWrap) diffWrap.style.display = isOnline ? 'none' : '';
+    if(onlineWrap) onlineWrap.style.display = isOnline ? '' : 'none';
+    if(startActions) startActions.style.display = isOnline ? 'none' : '';
+    if(isOnline) this.renderOnlinePanel();
+  },
+
+  // オンライン対戦パネルを、現在の接続状態（Online.panelState）に応じて描画する
+  renderOnlinePanel(){
+    const el = document.getElementById('online-panel');
+    if(!el) return;
+    const st = Online.panelState;
+    if(st==='idle'){
+      el.innerHTML = `
+        <div class="online-choice-row">
+          <button class="btn primary" onclick="Online.startCreate()">部屋を作る</button>
+        </div>
+        <div class="online-status-text">合言葉をお持ちの場合はこちらから参加してください</div>
+        <div class="online-join-row">
+          <input type="text" id="online-code-input" class="online-code-input" placeholder="合言葉" maxlength="6" autocomplete="off" autocapitalize="characters">
+          <button class="btn" onclick="Online.startJoin(document.getElementById('online-code-input').value)">参加する</button>
+        </div>
+      `;
+    } else if(st==='creating'){
+      el.innerHTML = `<div class="online-status-text">部屋を準備しています<span class="online-waiting-dot"></span><span class="online-waiting-dot"></span><span class="online-waiting-dot"></span></div>`;
+    } else if(st==='joining'){
+      el.innerHTML = `<div class="online-status-text">部屋に接続しています<span class="online-waiting-dot"></span><span class="online-waiting-dot"></span><span class="online-waiting-dot"></span></div>`;
+    } else if(st==='waiting'){
+      el.innerHTML = `
+        <div class="online-status-text">この合言葉を、対戦相手に伝えてください</div>
+        <div class="online-code-display">${Online.roomCode}</div>
+        <div class="online-choice-row">
+          <button class="btn" onclick="UI.copyRoomCode()">合言葉をコピー</button>
+        </div>
+        <div class="online-status-text">対戦相手を待っています<span class="online-waiting-dot"></span><span class="online-waiting-dot"></span><span class="online-waiting-dot"></span></div>
+        <div class="online-choice-row">
+          <button class="btn ghost" onclick="Online.leaveRoom(); Online.resetPanel();">やめる</button>
+        </div>
+      `;
+    } else if(st==='error'){
+      el.innerHTML = `
+        <div class="online-error">${Online.errorMsg}</div>
+        <div class="online-choice-row">
+          <button class="btn" onclick="Online.resetPanel()">戻る</button>
+        </div>
+      `;
+    }
+  },
+
+  copyRoomCode(){
+    if(!Online.roomCode) return;
+    if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(Online.roomCode).then(()=>{
+        UI.showToast('合言葉をコピーしました', 'info');
+      }).catch(()=>{
+        UI.showToast('コピーに対応していない環境です', 'info');
+      });
+    }
   },
 
   renderStatsPanel(){
@@ -1130,23 +1419,16 @@ const UI = {
   backToStart(){
     const s = Game.state;
     if(s && !s.gameOver){
-      let msg;
-      if(s.isLocal2p){
-        const conceder = Game.playerAt(s.turnIndex);
-        const winner = Game.playerAt(Game.other(s.turnIndex));
-        msg = `対戦は進行中です。<br>投了すると${conceder.name}の負け、${winner.name}の勝利として記録されます。`;
-      } else {
-        const oppName = Game.opp() ? Game.opp().name : '相手';
-        msg = `対戦は進行中です。<br>投了すると${oppName}の勝利として記録されます。`;
-      }
+      const oppName = Game.opp() ? Game.opp().name : '相手';
+      const msg = `対戦は進行中です。<br>投了すると${oppName}の勝利として記録されます。`;
       UI.showInfoModal(
         '対戦を中断しますか？',
         msg,
         null, false,
         [
-          { label:'投了する', action:()=>{ Game.concede(); } },
-          { label:'記録せずタイトルへ戻る', action:()=>{ UI.forceBackToStart(); } },
-          { label:'対戦に戻る', action:()=>{} },
+          { label:'リタイア', action:()=>{ Game.concede(); } },
+          { label:'タイトルに戻る', action:()=>{ UI.forceBackToStart(); } },
+          { label:'ゲーム続行', action:()=>{} },
         ]
       );
       return;
@@ -1158,13 +1440,13 @@ const UI = {
     document.getElementById('info-overlay').classList.remove('open');
     document.getElementById('gameover-overlay').classList.remove('open');
     document.getElementById('discard-overlay').classList.remove('open');
-    document.getElementById('handoff-overlay').classList.remove('open');
     document.getElementById('log-panel').classList.remove('open');
     document.getElementById('table').classList.remove('open');
     document.getElementById('start-screen').style.display = '';
     document.body.classList.remove('table-mode');
     const header = document.getElementById('site-header');
     if(header) header.classList.remove('compact');
+    if(Game.state && Game.state.isOnline && typeof Online!=='undefined' && Online.leaveRoom) Online.leaveRoom();
     Game.state = null;
   },
 
@@ -1179,9 +1461,8 @@ const UI = {
   render(){
     if(!Game.state) return;
     const s = Game.state;
-    // CPU戦では常に「あなた(0)」が下段・CPU(1)が上段。
-    // ローカル2人対戦では、常に「今の手番」が下段（操作できる側）・「待機中」が上段になる。
-    const bottomIdx = s.isLocal2p ? s.turnIndex : 0;
+    // CPU戦・オンライン対戦ともに、常に自分の枠（myIdx）が下段、相手が上段になる。
+    const bottomIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
     const topIdx = Game.other(bottomIdx);
     const bottomPlayer = s.players[bottomIdx];
     const topPlayer = s.players[topIdx];
@@ -1193,17 +1474,18 @@ const UI = {
     document.getElementById('deck-count-text').setAttribute('aria-label',
       `山札：${bottomPlayer.name} ${s.decks[bottomIdx].length}枚、${topPlayer.name} ${s.decks[topIdx].length}枚`);
 
-    // 上段（対戦相手／待機中）
+    // 上段（対戦相手）
     document.getElementById('opp-name').textContent = topPlayer.name;
     document.getElementById('opp-protect').classList.toggle('show', topPlayer.protectedFlag);
     document.getElementById('opp-eliminated').classList.toggle('show', !topPlayer.alive);
-    const oppThinking = !s.gameOver && topPlayer.isCPU && (s.phase==='choose' || s.phase==='resolve');
+    const oppThinking = !s.gameOver && (s.phase==='choose' || s.phase==='resolve') &&
+      (topPlayer.isCPU || (s.isOnline && topIdx===s.turnIndex));
     document.getElementById('opp-hand').innerHTML = topPlayer.hand.map(()=>
       `<div class="card-back${oppThinking?' thinking':''}"><span class="mask-icon">🎭</span></div>`).join('');
     const oppZoneLabel = document.getElementById('opp-zone-label');
-    if(oppZoneLabel) oppZoneLabel.textContent = s.isLocal2p ? '待機中' : '対戦相手';
+    if(oppZoneLabel) oppZoneLabel.textContent = '対戦相手';
 
-    // 下段（あなた／今の手番）
+    // 下段（あなた）
     document.getElementById('me-name').textContent = bottomPlayer.name;
     document.getElementById('me-protect').classList.toggle('show', bottomPlayer.protectedFlag);
     document.getElementById('me-eliminated').classList.toggle('show', !bottomPlayer.alive);
@@ -1215,11 +1497,16 @@ const UI = {
       onclick: `UI.onMeSelectCard('${cid}')`,
     })).join('');
     const meZoneLabel = document.getElementById('me-zone-label');
-    if(meZoneLabel) meZoneLabel.textContent = s.isLocal2p ? '手番' : 'あなた';
+    if(meZoneLabel) meZoneLabel.textContent = 'あなた';
 
     this.renderActionPanel();
     if(document.getElementById('log-panel').classList.contains('open')) this.renderLog();
     if(document.getElementById('discard-overlay').classList.contains('open')) this.showDiscardModal();
+
+    // オンライン対戦：自分の操作による変化だけをFirestoreへ書き戻す（受信した更新の反映では書き戻さない）
+    if(s.isOnline && !Game._applyingRemote && typeof Online!=='undefined' && Online.scheduleSync){
+      Online.scheduleSync();
+    }
   },
 
   renderCard(cid, opts){
@@ -1271,20 +1558,6 @@ const UI = {
     if(overlay) overlay.classList.remove('open');
   },
 
-  showHandoff(name){
-    const overlay = document.getElementById('handoff-overlay');
-    const title = document.getElementById('handoff-title');
-    if(!overlay) return;
-    if(title) title.textContent = `${name}の番です`;
-    overlay.classList.add('open');
-  },
-
-  confirmHandoff(){
-    const overlay = document.getElementById('handoff-overlay');
-    if(overlay) overlay.classList.remove('open');
-    Game.revealTurn();
-  },
-
   renderLog(){
     const panel = document.getElementById('log-panel');
     const s = Game.state;
@@ -1313,9 +1586,10 @@ const UI = {
       const d = cardDef(cid);
       const activeIdx = s.turnIndex;
       const targetIdx = Game.other(activeIdx);
-      // actorIsMe: 今の手番のプレイヤーが（CPUではなく）その場で操作できる人間かどうか
-      // CPU戦では自分の番（0）の時だけ true。ローカル2人対戦ではどちらの番でも true になる。
-      const actorIsMe = !s.players[activeIdx].isCPU;
+      // actorIsMe: 今の手番のプレイヤーが、この端末で操作している「自分（myIdx）」かどうか
+      // CPU戦では自分の番（myIdx=0）の時だけ true。オンライン対戦では自分の枠の番の時だけ true になる。
+      const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
+      const actorIsMe = !s.players[activeIdx].isCPU && activeIdx===myIdx;
       if(!actorIsMe){
         box.innerHTML = `${s.players[activeIdx].name}が「${d.name}」の力を発動している…`;
         return;
@@ -1371,7 +1645,8 @@ const UI = {
     }
 
     if(s.phase==='choose'){
-      const activeIsHuman = !s.players[s.turnIndex].isCPU;
+      const myIdxC = (typeof s.myIdx==='number') ? s.myIdx : 0;
+      const activeIsHuman = !s.players[s.turnIndex].isCPU && s.turnIndex===myIdxC;
       if(activeIsHuman){
         if(this.selectedCardId){
           const d = cardDef(this.selectedCardId);
@@ -1400,7 +1675,9 @@ const UI = {
 
   onMeSelectCard(cid){
     const s = Game.state;
-    if(!s || s.phase!=='choose' || s.players[s.turnIndex].isCPU) return;
+    if(!s || s.phase!=='choose') return;
+    const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
+    if(s.players[s.turnIndex].isCPU || s.turnIndex!==myIdx) return;
     this.selectedCardId = (this.selectedCardId===cid) ? null : cid;
     this.render();
   },
@@ -1414,7 +1691,9 @@ const UI = {
     const cid = this.selectedCardId;
     if(!cid) return;
     const s = Game.state;
-    if(!s || s.phase!=='choose' || s.players[s.turnIndex].isCPU) return;
+    if(!s || s.phase!=='choose') return;
+    const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
+    if(s.players[s.turnIndex].isCPU || s.turnIndex!==myIdx) return;
     const activeIdx = s.turnIndex;
     this.selectedCardId = null;
     const el = document.querySelector(`#me-hand .card[data-cid="${cid}"]`);
@@ -1544,18 +1823,21 @@ const UI = {
     const s = Game.state;
     const overlay = document.getElementById('gameover-overlay');
     const box = document.getElementById('gameover-box');
+    const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
     let title, sub, palette;
-    if(s.isLocal2p){
+    if(s.isOnline){
       if(s.winner){
+        const iWon = s.winner.id===myIdx;
         title = `${s.winner.name}の勝利`;
         sub = s.endReason==='concede' ? `${s.players[Game.other(s.winner.id)].name}が投了した。` : '正体を見破られ、退場となった。';
-        palette=['var(--gold-light)','var(--gold)','var(--royal)']; if(typeof SFX!=='undefined') SFX.win();
+        palette = iWon ? ['var(--gold-light)','var(--gold)','var(--royal)'] : ['var(--velvet-light)','var(--danger)','var(--gold-dim)'];
+        if(typeof SFX!=='undefined'){ iWon ? SFX.win() : SFX.lose(); }
       } else {
         title='引き分け'; sub='舞踏会は決着つかず幕を閉じた。'; palette=['var(--silver)','var(--ivory-dim)','var(--gold-dim)'];
       }
-    } else if(s.winner && s.winner.id===0){ title='あなたの勝利'; sub='正体を隠し通し、王位を継承した。'; palette=['var(--gold-light)','var(--gold)','var(--royal)']; if(typeof SFX!=='undefined') SFX.win(); }
-    else if(s.winner && s.winner.id===1){
-      title=`${s.players[1].name}の勝利`;
+    } else if(s.winner && s.winner.id===myIdx){ title='あなたの勝利'; sub='正体を隠し通し、王位を継承した。'; palette=['var(--gold-light)','var(--gold)','var(--royal)']; if(typeof SFX!=='undefined') SFX.win(); }
+    else if(s.winner && s.winner.id===Game.other(myIdx)){
+      title=`${s.players[Game.other(myIdx)].name}の勝利`;
       sub = s.endReason==='concede' ? 'あなたは投了した。' : 'あなたの正体は見破られてしまった。';
       palette=['var(--velvet-light)','var(--danger)','var(--gold-dim)']; if(typeof SFX!=='undefined') SFX.lose();
     }
@@ -1569,11 +1851,11 @@ const UI = {
     }).join('');
 
     let streakLine = '', recordLine = '';
-    if(!s.isLocal2p){
+    if(!s.isOnline){
       const st = Game.stats[Game.difficulty] || { streak:0, best:0, wins:0, losses:0, draws:0 };
-      if(s.winner && s.winner.id===0 && st.streak>0){
+      if(s.winner && s.winner.id===myIdx && st.streak>0){
         streakLine = `<div class="result-streak win">${st.streak}連勝中！（自己ベスト ${st.best}連勝）</div>`;
-      } else if(s.winner && s.winner.id===1){
+      } else if(s.winner && s.winner.id===Game.other(myIdx)){
         streakLine = st.best>0
           ? `<div class="result-streak lose">連勝はここで途切れた（自己ベスト ${st.best}連勝）</div>`
           : '';
@@ -1601,18 +1883,21 @@ const UI = {
   shareResult(){
     const s = Game.state;
     if(!s) return;
+    const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
     let text;
-    if(s.isLocal2p){
+    if(s.isOnline){
       text = s.winner
-        ? `MASCARADE ―仮面領の一夜― で${s.winner.name}が勝利しました🎭 友達と対戦できるパス＆プレイ方式のカードゲームです。`
+        ? (s.winner.id===myIdx
+            ? `MASCARADE ―仮面領の一夜― でオンライン対戦に勝利しました🎭`
+            : `MASCARADE ―仮面領の一夜― でオンライン対戦に挑戦中🎭 正体を隠し通せるか…？`)
         : `MASCARADE ―仮面領の一夜― は引き分けに終わりました🎭`;
     } else {
       const st = Game.stats[Game.difficulty] || { streak:0, best:0 };
-      if(s.winner && s.winner.id===0){
+      if(s.winner && s.winner.id===myIdx){
         text = st.streak>1
           ? `MASCARADE ―仮面領の一夜― で${st.streak}連勝中🎭 正体を隠し通せるか、挑んでみませんか？`
           : `MASCARADE ―仮面領の一夜― で勝利しました🎭`;
-      } else if(s.winner && s.winner.id===1){
+      } else if(s.winner && s.winner.id===Game.other(myIdx)){
         text = `MASCARADE ―仮面領の一夜― に挑戦中🎭 正体を隠し通せるか…？`;
       } else {
         text = `MASCARADE ―仮面領の一夜― で引き分けに終わりました🎭`;
@@ -1659,5 +1944,5 @@ if('serviceWorker' in navigator){
 
 /* テスト用フック（jsdomヘッドレステストから利用。通常のプレイには使用しない） */
 if(typeof window!=='undefined'){
-  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS };
+  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS, Online };
 }
