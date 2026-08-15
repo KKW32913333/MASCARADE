@@ -871,12 +871,12 @@ const CPU = {
  * 想定した割り切りですので、ご了承ください。
  */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyAG624yygT8gBg6BoQP0xWvZM1oI-ynjms",
+  authDomain: "mascarade-8bfca.firebaseapp.com",
+  projectId: "mascarade-8bfca",
+  storageBucket: "mascarade-8bfca.firebasestorage.app.appspot.com",
+  messagingSenderId: "374518333404",
+  appId: "1:374518333404:web:26860a011e87c5da3a9919",
 };
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 紛らわしい 0/O・1/I/L を除外
