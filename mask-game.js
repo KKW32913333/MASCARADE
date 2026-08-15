@@ -698,6 +698,14 @@ const Game = {
     saveStats(this.stats);
   },
 
+  // 現在選択中の難易度の戦績（勝敗数・連勝記録）をリセットする
+  resetStats(diffId){
+    diffId = diffId || this.difficulty;
+    this.stats[diffId] = { wins:0, losses:0, draws:0, streak:0, best:0, played:0 };
+    saveStats(this.stats);
+    if(typeof UI!=='undefined' && UI.renderStatsPanel) UI.renderStatsPanel();
+  },
+
   // 投了する（自分の枠＝myIdxが常に投了者。相手の番でもいつでも投了できる）
   concede(){
     const s = this.state;
@@ -863,12 +871,12 @@ const CPU = {
  * 想定した割り切りですので、ご了承ください。
  */
 const firebaseConfig = {
-  apiKey: "AIzaSyAG624yygT8gBg6BoQP0xWvZM1oI-ynjms",
-  authDomain: "mascarade-8bfca.firebaseapp.com",
-  projectId: "Ymascarade-8bfca",
-  storageBucket: "mascarade-8bfca.firebasestorage.app",
-  messagingSenderId: "374518333404",
-  appId: "1:374518333404:web:26860a011e87c5da3a9919",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
 };
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 紛らわしい 0/O・1/I/L を除外
@@ -1156,8 +1164,9 @@ const UI = {
   runSplashProgress(){
     const fill = document.getElementById('splash-progress-fill');
     const sub = document.getElementById('splash-sub');
+    const startBtn = document.getElementById('splash-start-btn');
     if(!fill || !sub) return;
-    const messages = ['扉の前で支度を整えています…', '仮面を選んでいます…', '招待状を確かめています…', 'さあ、舞踏会へ'];
+    const messages = ['扉の前で支度を整えています', '仮面を選んでいます', '招待状を確かめています', 'さあ、舞踏会へ'];
     let step = 0;
     const setMessage = ()=>{
       sub.style.opacity = 0;
@@ -1174,7 +1183,12 @@ const UI = {
     raf(()=>{ raf(()=>{ if(fill) fill.style.width = '100%'; }); });
     const interval = setInterval(()=>{
       step++;
-      if(step >= messages.length){ clearInterval(interval); return; }
+      if(step >= messages.length){
+        clearInterval(interval);
+        // 支度が整ったら「はじめる」ボタンを表示する
+        if(startBtn) startBtn.classList.add('show');
+        return;
+      }
       setMessage();
     }, 900);
   },
@@ -1303,7 +1317,21 @@ const UI = {
       <span class="stats-record">${st.wins}勝 ${st.losses}敗 ${st.draws}分</span>
       ${streakHtml}
       <span class="stats-best">自己ベスト ${st.best}連勝</span>
+      <button type="button" class="stats-reset-btn" onclick="UI.confirmResetStats()" aria-label="この相手との戦績をリセット">記録をリセット</button>
     `;
+  },
+
+  confirmResetStats(){
+    const diffLabel = (DIFFICULTY_DEFS[Game.difficulty] || {}).label || '対戦相手';
+    UI.showInfoModal(
+      '戦績をリセットしますか？',
+      `「${diffLabel}」とのこれまでの勝敗数・連勝記録を消去します。<br>この操作は取り消せません。`,
+      null, false,
+      [
+        { label:'リセットする', action:()=>{ Game.resetStats(); UI.showToast('戦績をリセットしました', 'info'); } },
+        { label:'やめる', action:()=>{} },
+      ]
+    );
   },
 
   buildCandleGlow(){
