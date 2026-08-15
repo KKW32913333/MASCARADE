@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#fbf7ee">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="preload" as="image" href="./splash-bg.jpg">
 <link rel="icon" href="./favicon-16x16.png" type="image/png" sizes="16x16">
 <link rel="icon" href="./favicon-32x32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="./favicon-48x48.png" type="image/png" sizes="48x48">
@@ -22,19 +23,21 @@
 <style>
 :root{
   /* ==== カラーテーマ：Ivory Masquerade（白ベース） ====
-     白〜アイボリーを基調に、深みのある金と紅を差し色にした明るいテーマ。
+     白〜アイボリーを基調に、金・サファイアブルー・紫を差し色にした明るいテーマ。
      他の提案は README.md の「配色プリセット」を参照。
      切り替えたい場合はこのブロックの値を README 記載の別プリセットの値に差し替えるだけでOK。 */
-  --bg-deep:#fbf7ee;
-  --bg-mid:#f3ead4;
-  --bg-panel:#fffcf5;
+  --bg-deep:#fbf9f5;
+  --bg-mid:#eceef7;
+  --bg-panel:#fffdfa;
   --gold:#b8860b;
   --gold-light:#d9ad3f;
   --gold-dim:#8a6d1f;
-  --velvet:#7a1f36;
-  --velvet-light:#a8324a;
-  --ivory:#2e2438;
-  --ivory-dim:#6f6278;
+  --velvet:#2d3563;
+  --velvet-light:#5b4e9e;
+  --sapphire:#2c4a7c;
+  --sapphire-light:#4f76b0;
+  --ivory:#2a2740;
+  --ivory-dim:#6a6580;
   --ink:#2b2210;
   --card-face:#fffaf0;
   --card-face-shadow:#e6d9b8;
@@ -42,16 +45,16 @@
   --silver:#7c8590;
   --royal:#d9ad3f;
   --success:#3f7a3f;
-  --danger:#a8324a;
+  --danger:#5b4e9e;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0; height:100%;}
 body{
   min-height:100dvh;
   background:
-    radial-gradient(ellipse 60% 40% at 15% -5%, rgba(184,134,11,0.14), transparent 60%),
-    radial-gradient(ellipse 60% 40% at 85% -5%, rgba(184,134,11,0.14), transparent 60%),
-    radial-gradient(ellipse 90% 60% at 50% 110%, rgba(168,50,74,0.10), transparent 60%),
+    radial-gradient(ellipse 55% 38% at 10% -5%, rgba(184,134,11,0.12), transparent 60%),
+    radial-gradient(ellipse 55% 38% at 90% -5%, rgba(44,74,124,0.13), transparent 60%),
+    radial-gradient(ellipse 85% 55% at 50% 108%, rgba(91,78,158,0.12), transparent 62%),
     linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 55%, var(--bg-deep) 100%);
   color:var(--ivory);
   font-family:'Zen Maru Gothic', sans-serif;
@@ -73,8 +76,8 @@ body.table-mode{ overflow:hidden; }
 }
 .candle-glow{position:fixed; pointer-events:none; z-index:0; border-radius:50%; filter:blur(40px);}
 .candle-glow.a{ top:-8%; left:6%; width:38vw; height:38vw; background:radial-gradient(circle, rgba(184,134,11,0.16), transparent 65%); animation:flicker 7s ease-in-out infinite; }
-.candle-glow.b{ top:-10%; right:4%; width:34vw; height:34vw; background:radial-gradient(circle, rgba(184,134,11,0.13), transparent 65%); animation:flicker 9s ease-in-out infinite reverse; }
-.candle-glow.c{ bottom:-14%; left:50%; transform:translateX(-50%); width:70vw; height:40vw; background:radial-gradient(circle, rgba(122,31,54,0.12), transparent 65%); animation:flicker 11s ease-in-out infinite; }
+.candle-glow.b{ top:-10%; right:4%; width:34vw; height:34vw; background:radial-gradient(circle, rgba(44,74,124,0.15), transparent 65%); animation:flicker 9s ease-in-out infinite reverse; }
+.candle-glow.c{ bottom:-14%; left:50%; transform:translateX(-50%); width:70vw; height:40vw; background:radial-gradient(circle, rgba(45,53,99,0.12), transparent 65%); animation:flicker 11s ease-in-out infinite; }
 @keyframes flicker{ 0%,100%{opacity:.75; transform:scale(1);} 35%{opacity:1; transform:scale(1.06);} 55%{opacity:.6; transform:scale(.97);} 80%{opacity:.9; transform:scale(1.03);} }
 @media (prefers-reduced-motion: reduce){
   .sparkle{animation:none; display:none;}
@@ -85,133 +88,26 @@ body.table-mode{ overflow:hidden; }
 #splash-screen{
   position:fixed; inset:0; z-index:9999;
   height:100dvh; width:100%;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
-  padding:24px; overflow:hidden;
-  /* 舞踏会への"入り口"として、本編が白ベースになった今もここだけは意図的に暗いままにしている
-     （金の輝きが映える、ドラマチックな導入演出として） */
+  overflow:hidden; cursor:pointer;
   background-color:#241a35;
-  background-image:
-    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(184,134,11,0.22), transparent 62%),
-    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(122,31,54,0.26), transparent 65%),
-    linear-gradient(180deg, #241a35 0%, #3c2c50 55%, #241a35 100%);
+  background-image:url("./splash-bg.jpg");
+  background-size:cover; background-position:center center; background-repeat:no-repeat;
   transition:opacity .4s ease, transform .4s ease, visibility .4s ease;
-  animation:screenBreathe 6s ease-in-out infinite;
 }
 #splash-screen.dismissed{ opacity:0; visibility:hidden; pointer-events:none; transform:scale(1.03); }
-@keyframes screenBreathe{ 0%,100%{ background-position:0 0,0 0,0 0; } 50%{ background-position:0 -6px,0 6px,0 0; } }
 
-.splash-corner{ position:absolute; width:38px; height:38px; z-index:1; pointer-events:none; opacity:.75; }
-.splash-corner::before{ content:''; position:absolute; inset:0; border-color:var(--gold); }
-.splash-corner::after{
-  content:''; position:absolute; width:5px; height:5px; background:var(--gold-light);
-  box-shadow:0 0 6px rgba(217,173,63,0.7); transform:rotate(45deg);
+/* 画像内の「TAP TO START」表記のあたりに、ごく控えめな呼吸する光をひとつだけ添える
+   （軽量な opacity アニメーションのみ。ぼかしフィルターや粒子は使わずスマホの発熱を避ける） */
+.splash-tap-hint{
+  position:absolute; left:20%; right:20%; bottom:6%; height:9%;
+  border-radius:999px; pointer-events:none;
+  background:radial-gradient(ellipse 60% 100% at 50% 50%, rgba(217,173,63,0.22), transparent 75%);
+  animation:tapHintPulse 2.6s ease-in-out infinite;
 }
-.splash-corner.tl{ top:20px; left:20px; }
-.splash-corner.tl::before{ border-top:2px solid; border-left:2px solid; border-radius:8px 0 0 0; }
-.splash-corner.tl::after{ top:-3px; left:-3px; }
-.splash-corner.tr{ top:20px; right:20px; }
-.splash-corner.tr::before{ border-top:2px solid; border-right:2px solid; border-radius:0 8px 0 0; }
-.splash-corner.tr::after{ top:-3px; right:-3px; }
-.splash-corner.bl{ bottom:20px; left:20px; }
-.splash-corner.bl::before{ border-bottom:2px solid; border-left:2px solid; border-radius:0 0 0 8px; }
-.splash-corner.bl::after{ bottom:-3px; left:-3px; }
-.splash-corner.br{ bottom:20px; right:20px; }
-.splash-corner.br::before{ border-bottom:2px solid; border-right:2px solid; border-radius:0 0 8px 0; }
-.splash-corner.br::after{ bottom:-3px; right:-3px; }
-
-.splash-particles{ position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
-.ember{
-  position:absolute; border-radius:50%; pointer-events:none;
-  background:radial-gradient(circle, rgba(184,134,11,0.55), transparent 70%);
-  filter:blur(5px); opacity:0; animation:emberDrift ease-in-out infinite;
-}
-@keyframes emberDrift{
-  0%{ opacity:0; transform:translateY(24px) scale(.8); }
-  18%{ opacity:.6; }
-  82%{ opacity:.3; }
-  100%{ opacity:0; transform:translateY(-110px) scale(1.2); }
-}
-
-.splash-logo-wrap{ position:relative; z-index:1; display:flex; align-items:center; justify-content:center; padding:0 12px; }
-.splash-logo-wrap::before{
-  content:''; position:absolute; inset:-30% -12%; border-radius:50%;
-  background:radial-gradient(circle, rgba(184,134,11,0.35), transparent 68%);
-  filter:blur(18px); animation:auraPulse 3.2s ease-in-out infinite;
-}
-.splash-logo-wrap::after{
-  content:''; position:absolute; inset:-55% -30%; border-radius:50%; z-index:-1;
-  background:radial-gradient(circle, rgba(122,31,54,0.3), transparent 70%);
-  filter:blur(26px); animation:auraPulse 4.4s ease-in-out .4s infinite;
-}
-@keyframes auraPulse{ 0%,100%{ opacity:.55; transform:scale(.94); } 50%{ opacity:.95; transform:scale(1.06); } }
-
-.splash-orbit{ position:absolute; inset:-46px; z-index:0; pointer-events:none; animation:orbitSpin 16s linear infinite; }
-.splash-orbit span{
-  position:absolute; top:50%; left:50%; width:4px; height:4px; border-radius:50%;
-  background:var(--gold-light); box-shadow:0 0 8px rgba(217,173,63,0.9);
-}
-.splash-orbit span:nth-child(1){ transform:translate(-50%,-50%) rotate(0deg) translateX(min(46vw,190px)); }
-.splash-orbit span:nth-child(2){ transform:translate(-50%,-50%) rotate(120deg) translateX(min(46vw,190px)); }
-.splash-orbit span:nth-child(3){ transform:translate(-50%,-50%) rotate(240deg) translateX(min(46vw,190px)); }
-@keyframes orbitSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
-
-.splash-title{
-  position:relative; z-index:1; margin:0; text-align:center;
-  font-family:'Cormorant Garamond', serif; font-weight:600; font-style:italic;
-  font-size:clamp(38px,13vw,64px); letter-spacing:.05em;
-  background:linear-gradient(100deg, var(--gold-dim) 0%, var(--gold-light) 22%, #fff6dd 40%, var(--gold-light) 58%, var(--gold-dim) 80%, var(--gold-light) 100%);
-  background-size:220% 100%;
-  -webkit-background-clip:text; background-clip:text; color:transparent;
-  animation:titleGlow 3s ease-in-out infinite, titleSweep 6s linear infinite;
-}
-.splash-title span{ display:inline-block; opacity:0; animation:letterRise .7s cubic-bezier(.2,.9,.3,1) forwards; }
-@keyframes letterRise{ from{ opacity:0; transform:translateY(18px); } to{ opacity:1; transform:translateY(0); } }
-@keyframes titleGlow{ 0%,100%{ filter:drop-shadow(0 0 16px rgba(184,134,11,0.35)); } 50%{ filter:drop-shadow(0 0 32px rgba(184,134,11,0.7)); } }
-@keyframes titleSweep{ 0%{ background-position:220% 0; } 100%{ background-position:-40% 0; } }
-.splash-subtitle{
-  position:relative; z-index:1; font-family:'Shippori Mincho',serif; font-size:14px; letter-spacing:.22em;
-  color:var(--gold-light); opacity:0; animation:fadeUp .7s ease .55s forwards; text-align:center;
-}
-.splash-divider{
-  width:150px; height:1px; position:relative; overflow:hidden; z-index:1;
-  background:linear-gradient(90deg, transparent, var(--gold), transparent);
-  animation:shimmerLine 3.2s ease-in-out infinite;
-}
-.splash-divider .divider-gem{
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(45deg);
-  width:6px; height:6px; background:var(--gold-light); box-shadow:0 0 8px rgba(217,173,63,0.8);
-}
-.splash-divider .divider-flourish{
-  position:absolute; top:50%; width:16px; height:1px;
-  background:linear-gradient(90deg, var(--gold), transparent);
-  opacity:.8;
-}
-.splash-divider .divider-flourish.l{ left:24px; transform:translateY(-50%) scaleX(-1); }
-.splash-divider .divider-flourish.r{ right:24px; transform:translateY(-50%); }
-.splash-progress{
-  width:min(60vw, 200px); height:5px; border-radius:999px; overflow:hidden; z-index:1;
-  background:rgba(255,255,255,0.12); border:1px solid rgba(184,134,11,0.35);
-  box-shadow:0 0 12px rgba(0,0,0,0.35) inset;
-}
-.splash-progress-fill{
-  height:100%; width:0%; border-radius:999px;
-  background:linear-gradient(90deg, var(--gold-dim), var(--gold-light));
-  box-shadow:0 0 10px rgba(217,173,63,0.6);
-  transition:width 1.5s cubic-bezier(.3,.7,.35,1);
-}
-.splash-sub{ font-size:12px; letter-spacing:.16em; color:#cdc3e6; font-family:'Shippori Mincho',serif; min-height:1.4em; z-index:1; transition:opacity .3s ease; }
-.splash-start-btn{ display:none; z-index:1; }
-.splash-start-btn.show{ display:inline-block; animation:fadeUp .5s ease both; }
+@keyframes tapHintPulse{ 0%,100%{ opacity:.35; } 50%{ opacity:.85; } }
 @media (prefers-reduced-motion: reduce){
-  #splash-screen{ animation:none; }
-  .splash-title{ animation:none; }
-  .splash-title span{ opacity:1; animation:none; }
-  .splash-logo-wrap::before, .splash-logo-wrap::after{ animation:none; }
-  .splash-orbit{ animation:none; display:none; }
-  .splash-divider{ animation:none; }
-  .splash-progress-fill{ transition:none; }
   #splash-screen{ transition:none; }
-  .splash-particles{ display:none; }
+  .splash-tap-hint{ animation:none; opacity:.5; }
 }
 
 #app{position:relative; z-index:1; max-width:760px; margin:0 auto; padding:0 14px 40px; display:flex; flex-direction:column; min-height:100dvh;}
@@ -329,6 +225,10 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 @media (prefers-reduced-motion: reduce){ .btn-grand{ animation:none; } .btn-grand::after{ display:none; } }
 
 .difficulty-wrap{ text-align:center; margin:12px 0 8px; }
+.mini-flourish{ display:flex; align-items:center; justify-content:center; gap:8px; margin:2px 0; opacity:.6; }
+.mini-flourish::before, .mini-flourish::after{ content:''; width:38px; height:1px; background:linear-gradient(90deg, transparent, var(--gold)); }
+.mini-flourish::after{ background:linear-gradient(90deg, var(--gold), transparent); }
+.mini-flourish span{ width:5px; height:5px; background:var(--gold-light); transform:rotate(45deg); flex:0 0 auto; }
 .difficulty-label{ font-size:10.5px; letter-spacing:.16em; color:var(--gold-dim); margin-bottom:8px; font-family:'Shippori Mincho',serif; }
 .difficulty-row{ display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
 .diff-btn{
@@ -393,7 +293,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 
 .zone{
   background:rgba(184,134,11,0.035); border:1px solid rgba(184,134,11,0.18);
-  border-radius:14px; padding:10px 14px; position:relative; flex:0 0 auto;
+  border-radius:14px; padding:10px 14px; position:relative; flex:0.44 1 auto;
 }
 .zone::before, .zone::after{
   content:''; position:absolute; width:13px; height:13px; pointer-events:none; opacity:.5; border-color:var(--gold-dim);
@@ -404,7 +304,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   position:absolute; top:-9px; left:14px; background:var(--bg-deep); padding:0 8px;
   font-size:10px; letter-spacing:.16em; color:var(--gold); font-family:'Shippori Mincho',serif;
 }
-#action-zone-wrap{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+#action-zone-wrap{ flex:0.3 1 auto; min-height:0; display:flex; flex-direction:column; padding:8px 14px; }
 #action-zone-wrap #action-panel{ flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
 .player-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .player-name{ display:flex; align-items:center; gap:8px; font-family:'Shippori Mincho',serif; font-size:13px; }
@@ -419,7 +319,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .zone.elim-flash{ animation:elimFlash .7s ease; }
 @keyframes elimFlash{
   0%{ box-shadow:none; }
-  25%{ box-shadow:0 0 0 1px rgba(168,50,74,0.5), 0 0 42px rgba(168,50,74,0.5); transform:translateX(-5px); }
+  25%{ box-shadow:0 0 0 1px rgba(91,78,158,0.5), 0 0 42px rgba(91,78,158,0.5); transform:translateX(-5px); }
   50%{ transform:translateX(5px); }
   70%{ transform:translateX(-3px); }
   100%{ box-shadow:none; transform:translateX(0); }
@@ -428,7 +328,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 
 .hand-area{ display:flex; gap:12px; margin-top:8px; align-items:center; justify-content:center; }
 .card{
-  width:128px; flex:0 0 auto; aspect-ratio:300/505; border-radius:10px; position:relative;
+  width:156px; flex:0 0 auto; aspect-ratio:300/505; border-radius:10px; position:relative;
   overflow:hidden;
   /* すべてのカードで統一した縁デザイン（"王家の輝き"）。数字によって縁の色を変えると、
      ちらっと見ただけで相手に手札の強さを悟られてしまうため、価値に関わらず全カード同じ縁にしている */
@@ -449,7 +349,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 @media (prefers-reduced-motion: reduce){ .card.selectable{ animation:none; } .card{ animation:none; } }
 
 .card-back{
-  width:96px; flex:0 0 auto; aspect-ratio:300/505; border-radius:9px;
+  width:116px; flex:0 0 auto; aspect-ratio:300/505; border-radius:9px;
   background:
     radial-gradient(circle at 50% 42%, rgba(184,134,11,0.35) 0%, transparent 45%),
     repeating-linear-gradient(45deg, #4a3966 0 6px, #382a52 6px 12px);
@@ -512,7 +412,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
     radial-gradient(ellipse 70% 90% at 50% 40%, rgba(184,134,11,0.10), transparent 70%),
     rgba(184,134,11,0.06);
   border:1px solid rgba(184,134,11,0.3); border-radius:14px;
-  padding:12px; margin-top:4px; text-align:center;
+  padding:10px 12px; margin-top:4px; text-align:center;
 }
 #action-panel .prompt{ font-family:'Shippori Mincho',serif; font-size:13.5px; color:var(--ivory); margin-bottom:10px; line-height:1.6; }
 #action-panel .sub-desc{ display:block; font-family:'Zen Maru Gothic',sans-serif; font-size:11.5px; color:var(--ivory-dim); margin-top:4px; line-height:1.6; }
@@ -586,7 +486,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   background:linear-gradient(135deg, rgba(239,231,210,0.97), rgba(195,185,164,0.97)); color:var(--ink);
 }
 .turn-banner.toast.danger{
-  background:linear-gradient(135deg, rgba(168,50,74,0.97), rgba(122,31,54,0.97)); color:#f7f0df;
+  background:linear-gradient(135deg, rgba(91,78,158,0.97), rgba(45,53,99,0.97)); color:#f7f0df;
 }
 @keyframes toastPop{
   0%{ opacity:0; transform:translate(-50%,10px) scale(.92); }
@@ -603,6 +503,11 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   animation:modalIn .25s ease both;
   position:relative; overflow:visible;
 }
+.modal-box::before, .modal-box::after{
+  content:''; position:absolute; width:18px; height:18px; pointer-events:none; opacity:.5; border-color:var(--gold-dim);
+}
+.modal-box::before{ top:8px; left:8px; border-top:1.5px solid; border-left:1.5px solid; border-radius:5px 0 0 0; }
+.modal-box::after{ bottom:8px; right:8px; border-bottom:1.5px solid; border-right:1.5px solid; border-radius:0 0 5px 0; }
 @keyframes modalIn{ from{opacity:0; transform:scale(.92) translateY(8px);} to{opacity:1; transform:none;} }
 .modal-box h4{ font-family:'Shippori Mincho',serif; color:var(--gold-dim); font-size:16px; margin:0 0 12px; letter-spacing:.05em;}
 .modal-box p{ font-size:13.5px; line-height:1.8; color:var(--ivory); margin:0 0 16px; }
@@ -652,7 +557,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   font-size:13px; font-weight:600; border-radius:999px; padding:6px 14px; margin:0 0 14px; display:inline-block;
 }
 #gameover-overlay .result-streak.win{ background:rgba(184,134,11,0.16); color:var(--gold-dim); border:1px solid rgba(184,134,11,0.4); }
-#gameover-overlay .result-streak.lose{ background:rgba(168,50,74,0.12); color:var(--velvet-light); border:1px solid rgba(168,50,74,0.3); font-weight:400; }
+#gameover-overlay .result-streak.lose{ background:rgba(91,78,158,0.12); color:var(--velvet-light); border:1px solid rgba(91,78,158,0.3); font-weight:400; }
 #gameover-overlay .result-record{ font-size:11.5px; color:var(--ivory-dim); margin-top:10px; }
 #gameover-overlay .reveal-row{ animation:fadeUp .5s ease both; }
 #gameover-overlay .reveal-row:nth-child(2){ animation-delay:.12s; }
@@ -663,8 +568,8 @@ footer.credits{ text-align:center; font-size:9.5px; color:#8f8168; margin-top:12
 body.table-mode footer.credits{ display:none; }
 
 @media (max-width:420px){
-  .card{ width:88px; }
-  .card-back{ width:64px; }
+  .card{ width:108px; }
+  .card-back{ width:80px; }
 }
 
 /* ---------- 横向き（ランドスケープ）のスマホ向け調整 ---------- */
@@ -682,8 +587,8 @@ body.table-mode footer.credits{ display:none; }
   .zone{ padding:6px 12px; }
   .zone::before, .zone::after{ width:9px; height:9px; }
   .hand-area{ margin-top:4px; }
-  .card{ width:82px; }
-  .card-back{ width:60px; }
+  .card{ width:88px; }
+  .card-back{ width:64px; }
   #action-panel{ padding:8px; }
   #action-panel .prompt{ font-size:12px; margin-bottom:6px; }
   .zone-label{ font-size:9px; top:-7px; padding:0 6px; }
@@ -693,8 +598,8 @@ body.table-mode footer.credits{ display:none; }
 
 /* ---------- タブレット・PC（幅に余裕がある画面）向けの拡大表示 ---------- */
 @media (min-width:700px){
-  .card{ width:150px; }
-  .card-back{ width:114px; }
+  .card{ width:162px; }
+  .card-back{ width:124px; }
   .zone{ padding:18px 24px; }
   #action-panel{ padding:18px 20px; }
   #action-panel .prompt{ font-size:15px; }
@@ -706,27 +611,8 @@ body.table-mode footer.credits{ display:none; }
 <div class="sparkle-layer" id="sparkle-layer"></div>
 
 <!-- ============ SPLASH SCREEN ============ -->
-<div id="splash-screen">
-  <span class="splash-corner tl"></span>
-  <span class="splash-corner tr"></span>
-  <span class="splash-corner bl"></span>
-  <span class="splash-corner br"></span>
-  <div class="splash-particles" id="splash-particles"></div>
-  <div class="splash-logo-wrap">
-    <div class="splash-orbit"><span></span><span></span><span></span></div>
-    <h1 class="splash-title" id="splash-title"></h1>
-  </div>
-  <div class="splash-subtitle">仮面領の一夜</div>
-  <div class="splash-divider">
-    <span class="divider-flourish l"></span>
-    <span class="divider-gem"></span>
-    <span class="divider-flourish r"></span>
-  </div>
-  <div class="splash-progress" id="splash-progress">
-    <div class="splash-progress-fill" id="splash-progress-fill"></div>
-  </div>
-  <div class="splash-sub" id="splash-sub">仮面領の扉を開いています…</div>
-  <button class="btn-grand splash-start-btn" id="splash-start-btn" onclick="UI.dismissSplash()">はじめる</button>
+<div id="splash-screen" onclick="UI.dismissSplash()" role="button" tabindex="0" aria-label="タップしてはじめる" onkeydown="if(event.key==='Enter'||event.key===' '){UI.dismissSplash();}">
+  <div class="splash-tap-hint" aria-hidden="true"></div>
 </div>
 
 <div id="app">
@@ -753,6 +639,8 @@ body.table-mode footer.credits{ display:none; }
       <div class="difficulty-row" id="mode-row"></div>
       <div class="difficulty-epithet" id="mode-epithet"></div>
     </div>
+
+    <div class="mini-flourish" aria-hidden="true"><span></span></div>
 
     <div class="difficulty-wrap" id="difficulty-wrap">
       <div class="difficulty-label">対戦相手の格</div>
