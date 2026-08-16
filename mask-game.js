@@ -115,6 +115,30 @@ const MODE_DEFS = {
 const MODE_ORDER = ['cpu','online'];
 
 /* ---------------------------------------------------------------------
+ * 2b-3. オンライン対戦の表示名（ランキングにも使う）
+ * ------------------------------------------------------------------- */
+const PLAYER_NAME_KEY = 'mascarade_player_name_v1';
+// 表示名はログやランキングなど、他のプレイヤーの画面にもそのまま使われるため、
+// HTMLとして解釈されうる文字をあらかじめ取り除いておく（入力時点で安全な形にする）。
+function sanitizePlayerName(raw){
+  let name = String(raw==null ? '' : raw).trim();
+  name = name.replace(/[<>&"'`]/g, '');
+  return name.slice(0, 12);
+}
+function loadPlayerName(){
+  try{
+    if(typeof localStorage==='undefined') return '';
+    return sanitizePlayerName(localStorage.getItem(PLAYER_NAME_KEY) || '');
+  }catch(e){ return ''; }
+}
+function savePlayerName(name){
+  const clean = sanitizePlayerName(name);
+  try{ if(typeof localStorage!=='undefined') localStorage.setItem(PLAYER_NAME_KEY, clean); }catch(e){}
+  return clean;
+}
+
+
+/* ---------------------------------------------------------------------
  * 2c. 戦績（連勝）の永続化
  * ------------------------------------------------------------------- */
 const STATS_KEY = 'mascarade_stats_v1';
@@ -764,7 +788,11 @@ const Game = {
   // 現在選択中の難易度に対する戦績（勝敗・連勝）を更新して保存する
   recordResult(){
     const s = this.state;
-    if(s.isOnline) return; // オンライン対戦は難易度別の戦績には含めない
+    if(s.isOnline){
+      // オンライン対戦は難易度別の戦績には含めず、代わりにランキング（leaderboard）へ記録する
+      if(typeof Online!=='undefined' && Online.recordMatchResult) Online.recordMatchResult();
+      return;
+    }
     const st = ensureDiffStats(this.stats, this.difficulty);
     st.played++;
     if(s.winner && s.winner.id===0){
@@ -1107,8 +1135,9 @@ const Online = {
   _createRoom(){
     const code = generateRoomCode();
     CPU.rangeMemory = {}; CPU.bottomMemory = null; CPU.exactMemory = {};
-    // 名前は視点に依存しない共通の呼び名にしておく（「あなた」表記は各端末側の描画だけで行う）
-    const state = Game.buildFreshState(['プレイヤー1','プレイヤー2']);
+    // ホストの表示名を反映する（未設定なら仮の呼び名）。ゲスト側は参加時に自分の名前へ更新する。
+    const hostName = loadPlayerName() || '名もなき仮面卿';
+    const state = Game.buildFreshState([hostName, '対戦相手を待っています']);
     let settled = false;
     const timeoutId = setTimeout(()=>{
       if(settled) return;
@@ -1182,10 +1211,14 @@ const Online = {
         UI.renderOnlinePanel();
         return;
       }
-      // 参加者側は名前を書き換えない（両者で共有する1つのデータなので、視点による表記ゆれを持ち込まない）
+      // ゲストの表示名を、待機中だったプレースホルダーへ上書きする
+      const guestName = loadPlayerName() || '名もなき仮面卿';
+      const newState = data.state;
+      if(newState && newState.players && newState.players[1]) newState.players[1].name = guestName;
       return ref.update({
         guestUid: this.uid,
         status: 'playing',
+        state: newState,
         updatedAt: Date.now(),
       }).then(()=>{
         if(settled) return;
@@ -1262,6 +1295,49 @@ const Online = {
     }).catch((err)=>{ console.error('chat send failed', err); });
   },
 
+  // オンライン対戦の結果を、自分自身のランキング（leaderboard）記録へ反映する。
+  // セキュリティルール上、各プレイヤーは自分のuidの文書にしか書き込めないため、
+  // 対局に参加した両者が、それぞれ自分の結果を自分で記録する形になっている。
+  recordMatchResult(){
+    if(!this.db || !this.uid) return;
+    const s = Game.state;
+    if(!s) return;
+    const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
+    let outcome; // 'win' | 'loss' | 'draw'
+    if(!s.winner) outcome = 'draw';
+    else outcome = (s.winner.id===myIdx) ? 'win' : 'loss';
+    const myName = loadPlayerName() || (s.players[myIdx] && s.players[myIdx].name) || '名もなき仮面卿';
+
+    const ref = this.db.collection('leaderboard').doc(this.uid);
+    this.db.runTransaction((tx)=>{
+      return tx.get(ref).then((doc)=>{
+        const cur = doc.exists ? doc.data() : { points:0, wins:0, losses:0, draws:0, streak:0, bestStreak:0 };
+        let { points=0, wins=0, losses=0, draws=0, streak=0, bestStreak=0 } = cur;
+        if(outcome==='win'){ points+=3; wins+=1; streak+=1; bestStreak=Math.max(bestStreak, streak); }
+        else if(outcome==='draw'){ points+=1; draws+=1; streak=0; }
+        else { losses+=1; streak=0; }
+        tx.set(ref, {
+          name: sanitizePlayerName(myName) || '名もなき仮面卿',
+          points, wins, losses, draws, streak, bestStreak,
+          updatedAt: Date.now(),
+        }, { merge:true });
+      });
+    }).catch((err)=>{
+      console.error('[MASCARADE] ランキングの記録に失敗:', err);
+    });
+  },
+
+  // ランキング上位を取得する（多い順に指定件数）
+  fetchLeaderboard(limit){
+    if(!this.db) return Promise.resolve([]);
+    return this.db.collection('leaderboard').orderBy('points','desc').limit(limit||20).get()
+      .then((snap)=>{
+        const rows = [];
+        snap.forEach(doc=> rows.push(Object.assign({ uid: doc.id }, doc.data())));
+        return rows;
+      });
+  },
+
   // 自分の操作でGame.stateが変化した時、少し間を置いてFirestoreへ書き戻す（連続書き込みをまとめる）
   scheduleSync(){
     if(!this.roomCode || !this.db) return;
@@ -1299,6 +1375,124 @@ const Online = {
     this.panelState = 'idle';
     this.errorMsg = '';
     UI.renderOnlinePanel();
+  },
+
+  // 「サインイン→書き込み→読み取り→削除」を実際に1つずつ試し、どの段階で失敗しているかを
+  // 具体的に表示する診断ツール。「部屋を準備しています…」等で原因が分からず止まってしまう
+  // 場合に、ご自身で問題を切り分けられるようにするためのもの。
+  runDiagnostics(){
+    const log = [];
+    const render = (running)=>{
+      const el = document.getElementById('online-panel');
+      if(!el) return;
+      el.innerHTML = `
+        <div class="online-status-text" style="text-align:left; white-space:pre-wrap; line-height:1.9;">${log.join('\n')}</div>
+        ${running ? '<div class="online-status-text">実行中<span class="online-waiting-dot"></span><span class="online-waiting-dot"></span><span class="online-waiting-dot"></span></div>' : ''}
+        <div class="online-choice-row" style="margin-top:10px;">
+          <button class="btn" onclick="Online.resetPanel()">戻る</button>
+        </div>
+      `;
+    };
+    log.push('① firebaseConfig の確認…');
+    render(true);
+    if(!this.isConfigured()){
+      log.push('　→ ✕ firebaseConfig が未設定のままです。');
+      render(false);
+      return;
+    }
+    log.push('　→ ✓ 設定済み');
+
+    log.push('② SDKの読み込み確認…');
+    if(typeof firebase==='undefined'){
+      log.push('　→ ✕ Firebase SDK が読み込めていません（通信環境をご確認ください）。');
+      render(false);
+      return;
+    }
+    log.push('　→ ✓ 読み込み済み');
+    render(true);
+
+    try{
+      if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      this.db = firebase.firestore();
+    }catch(err){
+      log.push(`　→ ✕ 初期化エラー：${err.message}`);
+      render(false);
+      return;
+    }
+
+    log.push('③ 匿名サインインを試行中…');
+    render(true);
+    const signInTimeout = setTimeout(()=>{
+      log.push('　→ ✕ タイムアウト（10秒応答なし）。匿名認証が有効になっているかご確認ください。');
+      render(false);
+    }, 10000);
+
+    firebase.auth().signInAnonymously().then(()=>{
+      // onAuthStateChangedで確定するのを待つ
+    }).catch((err)=>{
+      clearTimeout(signInTimeout);
+      log.push(`　→ ✕ サインイン失敗：${err.code || err.message}`);
+      if(err.code==='auth/admin-restricted-operation' || err.code==='auth/operation-not-allowed'){
+        log.push('　　（Firebaseコンソールの Authentication → Sign-in method で「匿名」を有効にしてください）');
+      }
+      render(false);
+    });
+
+    let authDone = false;
+    firebase.auth().onAuthStateChanged((user)=>{
+      if(!user || authDone) return;
+      authDone = true;
+      clearTimeout(signInTimeout);
+      log.push(`　→ ✓ サインイン成功（uid: ${user.uid.slice(0,8)}…）`);
+      render(true);
+
+      log.push('④ Firestoreへの書き込みを試行中…');
+      render(true);
+      const testId = 'diag_' + Date.now();
+      const writeTimeout = setTimeout(()=>{
+        log.push('　→ ✕ タイムアウト（10秒応答なし）。Firestoreデータベースが作成済みか、通信環境をご確認ください。');
+        render(false);
+      }, 10000);
+
+      this.db.collection('_diagnostics').doc(testId).set({ createdAt: Date.now(), uid: user.uid })
+        .then(()=>{
+          clearTimeout(writeTimeout);
+          log.push('　→ ✓ 書き込み成功');
+          render(true);
+
+          log.push('⑤ Firestoreからの読み取りを試行中…');
+          render(true);
+          return this.db.collection('_diagnostics').doc(testId).get();
+        })
+        .then((doc)=>{
+          if(doc && doc.exists){
+            log.push('　→ ✓ 読み取り成功');
+          } else {
+            log.push('　→ ✕ 書き込んだはずのデータが見つかりません');
+          }
+          render(true);
+          log.push('⑥ 後片付け（テスト用データの削除）中…');
+          render(true);
+          return this.db.collection('_diagnostics').doc(testId).delete();
+        })
+        .then(()=>{
+          log.push('　→ ✓ 削除成功');
+          log.push('');
+          log.push('✅ すべての診断に成功しました。Firebaseとの接続は正常です。');
+          log.push('（それでも部屋の作成がうまくいかない場合は、セキュリティルールの rooms コレクション向けの設定をご確認ください）');
+          render(false);
+        })
+        .catch((err)=>{
+          clearTimeout(writeTimeout);
+          log.push(`　→ ✕ 失敗：${err.code || err.message}`);
+          if(err.code==='permission-denied'){
+            log.push('　　（Firestoreのセキュリティルールが未公開、または内容が正しくない可能性があります）');
+          } else if(err.code==='not-found' || err.code==='unavailable'){
+            log.push('　　（Firestoreデータベース自体がまだ作成されていない可能性があります）');
+          }
+          render(false);
+        });
+    });
   },
 };
 
@@ -1433,6 +1627,15 @@ const Tutorial = {
  * ------------------------------------------------------------------- */
 const UI = {
   selectedCardId: null,
+
+  // ユーザーが入力した文字列（表示名など）をHTMLへ安全に挿入するためのエスケープ処理。
+  // 表示名はFirestore経由で他のプレイヤーの画面にも表示されるため、
+  // スクリプト注入等を防ぐために必ずこれを通す。
+  escapeHtml(str){
+    return String(str==null ? '' : str).replace(/[&<>"']/g, (c)=>({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;',
+    }[c]));
+  },
 
   init(){
     this.buildRulesPanel();
@@ -1610,8 +1813,17 @@ const UI = {
     const el = document.getElementById('online-panel');
     if(!el) return;
     const st = Online.panelState;
+    const nameRow = `
+      <div class="online-name-row">
+        <span>表示名：<b>${UI.escapeHtml(loadPlayerName() || '未設定')}</b></span>
+        <button class="btn ghost" style="font-size:11px; padding:5px 10px;" onclick="UI.promptPlayerName()">変更</button>
+      </div>
+      <div class="online-choice-row" style="margin-bottom:8px;">
+        <button class="btn ghost" style="font-size:11px;" onclick="UI.showLeaderboard()">🏆 ランキングを見る</button>
+      </div>
+    `;
     if(st==='idle'){
-      el.innerHTML = `
+      el.innerHTML = nameRow + `
         <div class="online-choice-row">
           <button class="btn primary" onclick="Online.startCreate()">部屋を作る</button>
         </div>
@@ -1619,6 +1831,9 @@ const UI = {
         <div class="online-join-row">
           <input type="text" id="online-code-input" class="online-code-input" placeholder="合言葉" maxlength="6" autocomplete="off" autocapitalize="characters">
           <button class="btn" onclick="Online.startJoin(document.getElementById('online-code-input').value)">参加する</button>
+        </div>
+        <div class="online-choice-row" style="margin-top:6px;">
+          <button class="btn ghost" style="font-size:11px;" onclick="Online.runDiagnostics()">接続テストを実行</button>
         </div>
       `;
     } else if(st==='creating'){
@@ -1656,6 +1871,93 @@ const UI = {
         UI.showToast('コピーに対応していない環境です', 'info');
       });
     }
+  },
+
+  // オンライン対戦・ランキングで使う表示名を入力してもらう
+  promptPlayerName(){
+    const overlay = document.getElementById('info-overlay');
+    const box = document.getElementById('info-box');
+    const current = loadPlayerName();
+    box.innerHTML = `
+      <h4>表示名を設定</h4>
+      <p>オンライン対戦やランキングで使われる名前です（12文字まで）。</p>
+      <div class="choice-row">
+        <input type="text" id="player-name-input" class="online-code-input" style="text-transform:none; letter-spacing:.05em;" value="${UI.escapeHtml(current)}" maxlength="12" placeholder="仮面卿">
+      </div>
+      <div class="choice-row" style="margin-top:12px;">
+        <button class="btn primary" id="player-name-save">保存</button>
+        <button class="btn ghost" id="player-name-cancel">キャンセル</button>
+      </div>
+    `;
+    overlay.classList.add('open');
+    const input = document.getElementById('player-name-input');
+    document.getElementById('player-name-save').onclick = ()=>{
+      const clean = savePlayerName(input.value);
+      overlay.classList.remove('open');
+      if(Game.state && Game.state.isOnline){
+        // 対局中に変更した場合は自分の表示名も更新する
+        const myIdx = (typeof Game.state.myIdx==='number') ? Game.state.myIdx : 0;
+        Game.state.players[myIdx].name = clean || Game.state.players[myIdx].name;
+        UI.render();
+      }
+      if(document.getElementById('online-panel')) UI.renderOnlinePanel();
+      UI.showToast(clean ? `表示名を「${clean}」に設定しました` : '表示名をクリアしました', 'info');
+    };
+    document.getElementById('player-name-cancel').onclick = ()=>{ overlay.classList.remove('open'); };
+  },
+
+  // ランキング（leaderboard）を取得して表示する
+  showLeaderboard(){
+    const overlay = document.getElementById('info-overlay');
+    const box = document.getElementById('info-box');
+    box.innerHTML = `
+      <h4>🏆 ランキング</h4>
+      <div class="online-status-text">読み込み中<span class="online-waiting-dot"></span><span class="online-waiting-dot"></span><span class="online-waiting-dot"></span></div>
+      <div class="choice-row" style="margin-top:12px;"><button class="btn" id="leaderboard-close">閉じる</button></div>
+    `;
+    overlay.classList.add('open');
+    document.getElementById('leaderboard-close').onclick = ()=>{ overlay.classList.remove('open'); };
+
+    const renderRows = (rows)=>{
+      if(!document.getElementById('leaderboard-close')) return; // 既に閉じられていたら何もしない
+      const myUid = Online.uid;
+      if(!rows.length){
+        box.innerHTML = `
+          <h4>🏆 ランキング</h4>
+          <p>まだ誰も対局を終えていません。オンライン対戦で最初の記録を作ってみましょう。</p>
+          <div class="choice-row" style="margin-top:12px;"><button class="btn" id="leaderboard-close">閉じる</button></div>
+        `;
+      } else {
+        const list = rows.map((r,i)=>{
+          const mine = r.uid===myUid;
+          return `<div class="leaderboard-row${mine?' mine':''}">
+            <span class="lb-rank">${i+1}位</span>
+            <span class="lb-name">${UI.escapeHtml(r.name||'名もなき仮面卿')}</span>
+            <span class="lb-points">${r.points||0}pt</span>
+            <span class="lb-record">${r.wins||0}勝${r.losses||0}敗${r.draws||0}分</span>
+            <span class="lb-streak">${r.streak>0 ? `${r.streak}連勝中` : `自己ベスト${r.bestStreak||0}連勝`}</span>
+          </div>`;
+        }).join('');
+        box.innerHTML = `
+          <h4>🏆 ランキング</h4>
+          <div class="leaderboard-list">${list}</div>
+          <div class="choice-row" style="margin-top:12px;"><button class="btn" id="leaderboard-close">閉じる</button></div>
+        `;
+      }
+      document.getElementById('leaderboard-close').onclick = ()=>{ overlay.classList.remove('open'); };
+    };
+
+    Online.ensureReady(()=>{
+      Online.fetchLeaderboard(30).then(renderRows).catch((err)=>{
+        if(!document.getElementById('leaderboard-close')) return;
+        box.innerHTML = `
+          <h4>🏆 ランキング</h4>
+          <p class="online-error">読み込みに失敗しました（${err.code || err.message}）。</p>
+          <div class="choice-row" style="margin-top:12px;"><button class="btn" id="leaderboard-close">閉じる</button></div>
+        `;
+        document.getElementById('leaderboard-close').onclick = ()=>{ overlay.classList.remove('open'); };
+      });
+    });
   },
 
   renderStatsPanel(){
