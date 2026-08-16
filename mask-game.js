@@ -984,6 +984,8 @@ const Online = {
   },
 
   // Firebaseの初期化と匿名サインインを行う（初回のみ）。完了したらcallbackを呼ぶ。
+  // 万一どこかの通信が固まって応答が返ってこなくても、画面が無反応のまま止まり続けないよう
+  // タイムアウトを設けている（「部屋を準備しています…」で無限に止まってしまう不具合の対策）。
   ensureReady(callback){
     if(this.ready){ callback(); return; }
     if(typeof firebase==='undefined' || !this.isConfigured()){
@@ -992,17 +994,31 @@ const Online = {
       UI.renderOnlinePanel();
       return;
     }
+    let settled = false;
+    const timeoutId = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      this.panelState = 'error';
+      this.errorMsg = '接続がタイムアウトしました（15秒応答なし）。通信環境をご確認のうえ、Firestoreデータベースが作成済みか、セキュリティルールが公開されているかもあわせてご確認ください。';
+      UI.renderOnlinePanel();
+    }, 15000);
     try{
       if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
       this.db = firebase.firestore();
-      firebase.auth().onAuthStateChanged((user)=>{
-        if(user){
+      const unsubscribe = firebase.auth().onAuthStateChanged((user)=>{
+        if(user && !settled){
+          settled = true;
+          clearTimeout(timeoutId);
+          if(typeof unsubscribe==='function') unsubscribe(); // 1回で用済みなので解除する（重複登録を避ける）
           this.uid = user.uid;
           this.ready = true;
           callback();
         }
       });
       firebase.auth().signInAnonymously().catch((err)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         console.error('[MASCARADE] Firebase匿名サインイン失敗:', err);
         this.panelState = 'error';
         const code = err && err.code ? err.code : '';
@@ -1018,6 +1034,7 @@ const Online = {
         UI.renderOnlinePanel();
       });
     } catch(err){
+      clearTimeout(timeoutId);
       this.panelState = 'error';
       this.errorMsg = `Firebaseの初期化に失敗しました（${err.message}）。`;
       UI.renderOnlinePanel();
@@ -1036,6 +1053,14 @@ const Online = {
     CPU.rangeMemory = {}; CPU.bottomMemory = null; CPU.exactMemory = {};
     // 名前は視点に依存しない共通の呼び名にしておく（「あなた」表記は各端末側の描画だけで行う）
     const state = Game.buildFreshState(['プレイヤー1','プレイヤー2']);
+    let settled = false;
+    const timeoutId = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      this.panelState = 'error';
+      this.errorMsg = '部屋の作成がタイムアウトしました（15秒応答なし）。Firestoreデータベースが作成済みか、セキュリティルールが公開されているかをご確認ください。';
+      UI.renderOnlinePanel();
+    }, 15000);
     this.db.collection('rooms').doc(code).set({
       hostUid: this.uid,
       guestUid: null,
@@ -1044,12 +1069,18 @@ const Online = {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }).then(()=>{
+      if(settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
       this.roomCode = code;
       this.role = 'host';
       this.panelState = 'waiting';
       UI.renderOnlinePanel();
       this._listen(code);
     }).catch((err)=>{
+      if(settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
       this.panelState = 'error';
       this.errorMsg = `部屋の作成に失敗しました（${err.code || err.message}）。`;
       UI.renderOnlinePanel();
@@ -1066,9 +1097,20 @@ const Online = {
   },
 
   _joinRoom(code){
+    let settled = false;
+    const timeoutId = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      this.panelState = 'error';
+      this.errorMsg = '接続がタイムアウトしました（15秒応答なし）。通信環境や合言葉をご確認のうえ、もう一度お試しください。';
+      UI.renderOnlinePanel();
+    }, 15000);
     const ref = this.db.collection('rooms').doc(code);
     ref.get().then((doc)=>{
       if(!doc.exists){
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         this.panelState = 'error';
         this.errorMsg = `合言葉「${code}」の部屋が見つかりませんでした。`;
         UI.renderOnlinePanel();
@@ -1076,6 +1118,9 @@ const Online = {
       }
       const data = doc.data();
       if(data.status !== 'waiting' || data.guestUid){
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         this.panelState = 'error';
         this.errorMsg = 'この部屋はすでに満員か、対戦が終了しています。';
         UI.renderOnlinePanel();
@@ -1087,11 +1132,17 @@ const Online = {
         status: 'playing',
         updatedAt: Date.now(),
       }).then(()=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         this.roomCode = code;
         this.role = 'guest';
         this._listen(code);
       });
     }).catch((err)=>{
+      if(settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
       this.panelState = 'error';
       this.errorMsg = `参加に失敗しました（${err.code || err.message}）。`;
       UI.renderOnlinePanel();
