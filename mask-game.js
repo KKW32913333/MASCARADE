@@ -1199,22 +1199,16 @@ const Online = {
 const Tutorial = {
   active: false,
   shownSteps: null, // Set
+  catalogIndex: 0,
 
-  // 各ステップは、現在の Game.state（s）を見て「今このタイミングで見せるべきか」を判定する。
-  // 一度見せたステップは二度と表示しない。render() のたびに先頭から順にチェックし、
-  // 一致した最初の未表示ステップだけをその場で1つ表示する（同時に複数出さない）。
+  // 練習対局が始まった後に、状況に応じて追加で見せる補足ヒント
+  // （カード自体の説明は事前の一覧で済んでいるので、ここでは「操作の仕方」の補足に絞る）
   steps: [
-    {
-      id: 'intro',
-      trigger: ()=>true, // 練習対局が始まった直後、真っ先に表示
-      title: 'MASCARADEへようこそ',
-      html: '仮面舞踏会を舞台にした、1対1の心理戦カードゲームです。<br><br>手札は常に1枚。自分の番が来たら山札から1枚引いて2枚になり、そのうち1枚を場に出します。出した仮面の効果が発動し、時には相手を脱落させることもできます。<br><br>最後まで残るか、山札が尽きたときに一番大きい数字の仮面を持っていれば勝利です。<br><br>まずは実際の練習対局で試してみましょう。',
-    },
     {
       id: 'choose',
       trigger: (s)=> s.phase==='choose' && !s.players[s.turnIndex].isCPU,
       title: '仮面を選びましょう',
-      html: '下段の「あなた」の手札に、仮面が2枚あります。<br><br>1枚をタップして選び、「場に出す」ボタンを押してみましょう。数字が小さい仮面は比較的安全に出しやすく、大きい仮面ほど手元に残す価値があります。',
+      html: '下段の「あなた」の手札に、仮面が2枚あります。<br><br>1枚をタップして選び、「場に出す」ボタンを押してみましょう。先ほど見た効果一覧を思い出しながら、どちらを出すか考えてみてください。',
     },
     {
       id: 'resolve',
@@ -1243,6 +1237,54 @@ const Tutorial = {
     this._savedDifficulty = Game.difficulty; // 元の難易度設定を退避し、チュートリアル終了後に戻す
     Game.mode = 'cpu';
     Game.difficulty = 'novice'; // ここでは保存しない（チュートリアル専用の一時的な変更）
+    this.showIntro();
+  },
+
+  showIntro(){
+    UI.showInfoModal(
+      'MASCARADEへようこそ',
+      '仮面舞踏会を舞台にした、1対1の心理戦カードゲームです。<br><br>手札は常に1枚。自分の番が来たら山札から1枚引いて2枚になり、そのうち1枚を場に出します。出した仮面の効果が発動し、時には相手を脱落させることもできます。<br><br>最後まで残るか、山札が尽きたときに一番大きい数字の仮面を持っていれば勝利です。<br><br>まずは、10種類の仮面それぞれの効果を順番に見ていきましょう。',
+      null, false,
+      [ { label:'仮面の効果を見る', action:()=>{ Tutorial.showCatalogStep(0); } } ]
+    );
+  },
+
+  // 全10種のカードを1枚ずつ、効果とともに紹介していく一覧
+  showCatalogStep(index){
+    if(index < 0) index = 0;
+    if(index >= CARD_ORDER.length){
+      this.beginPracticeGame();
+      return;
+    }
+    this.catalogIndex = index;
+    const cid = CARD_ORDER[index];
+    const d = cardDef(cid);
+    const overlay = document.getElementById('info-overlay');
+    const box = document.getElementById('info-box');
+    const isLastCard = index === CARD_ORDER.length - 1;
+    box.innerHTML = `
+      <h4>${d.number}. ${d.name}（${d.yomi}）</h4>
+      <div class="tutorial-card-preview"><img src="${d.image}" alt="${d.name}"></div>
+      <p><b style="color:var(--gold-dim)">【${d.ability}】</b><br>${d.short || d.desc}</p>
+      <div class="tutorial-progress">${index+1} / ${CARD_ORDER.length}</div>
+      <div class="choice-row">
+        ${index>0 ? `<button class="btn" id="tut-prev">前へ</button>` : ''}
+        <button class="btn primary" id="tut-next">${isLastCard ? '練習対局へ進む' : '次へ'}</button>
+      </div>
+      ${!isLastCard ? `<div class="choice-row"><button class="btn ghost" id="tut-skip">スキップして練習対局へ</button></div>` : ''}
+    `;
+    overlay.classList.add('open');
+    if(index>0){
+      const prevBtn = document.getElementById('tut-prev');
+      if(prevBtn) prevBtn.onclick = ()=>{ Tutorial.showCatalogStep(index-1); };
+    }
+    document.getElementById('tut-next').onclick = ()=>{ Tutorial.showCatalogStep(index+1); };
+    const skipBtn = document.getElementById('tut-skip');
+    if(skipBtn) skipBtn.onclick = ()=>{ overlay.classList.remove('open'); Tutorial.beginPracticeGame(); };
+  },
+
+  beginPracticeGame(){
+    document.getElementById('info-overlay').classList.remove('open');
     Game.newGame();
   },
 
