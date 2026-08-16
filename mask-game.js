@@ -1052,6 +1052,27 @@ function generateRoomCode(len){
   return code;
 }
 
+// Firestoreは「配列の中に配列を直接ネストする」形式（array of arrays）を書き込めない。
+// ゲーム内部では s.decks を [自分の山札, 相手の山札] という配列の配列として扱っているため、
+// Firestoreへ送る直前だけ {d0:[...], d1:[...]} というオブジェクト形式に変換し、
+// 受け取った直後に元の配列形式へ戻す。ゲームロジック本体（s.decks[0] 等の参照）は変更しない。
+function serializeStateForFirestore(state){
+  const clean = Object.assign({}, state);
+  delete clean.isOnline;
+  delete clean.myIdx;
+  if(Array.isArray(clean.decks)){
+    clean.decks = { d0: clean.decks[0] || [], d1: clean.decks[1] || [] };
+  }
+  return clean;
+}
+function deserializeStateFromFirestore(data){
+  const state = Object.assign({}, data);
+  if(state.decks && !Array.isArray(state.decks)){
+    state.decks = [state.decks.d0 || [], state.decks.d1 || []];
+  }
+  return state;
+}
+
 const Online = {
   db: null,
   uid: null,
@@ -1150,7 +1171,7 @@ const Online = {
       hostUid: this.uid,
       guestUid: null,
       status: 'waiting',
-      state,
+      state: serializeStateForFirestore(state),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }).then(()=>{
@@ -1268,7 +1289,7 @@ const Online = {
   _enterGame(data){
     Game._applyingRemote = true;
     const myIdx = this.role === 'host' ? 0 : 1;
-    Game.state = Object.assign({}, data.state, { isOnline:true, myIdx });
+    Game.state = Object.assign({}, deserializeStateFromFirestore(data.state), { isOnline:true, myIdx });
     if(Game.state.phase==='idle'){
       // ホスト側：ゲストが参加した瞬間、最初のターンを開始してから同期する
       if(this.role==='host'){
@@ -1347,11 +1368,8 @@ const Online = {
 
   _pushState(){
     if(!this.roomCode || !this.db || !Game.state) return;
-    const clean = Object.assign({}, Game.state);
-    delete clean.isOnline;
-    delete clean.myIdx;
     this.db.collection('rooms').doc(this.roomCode).update({
-      state: clean,
+      state: serializeStateForFirestore(Game.state),
       status: Game.state.gameOver ? 'over' : 'playing',
       updatedAt: Date.now(),
     }).catch((err)=>{
