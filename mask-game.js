@@ -674,7 +674,8 @@ const Game = {
       s.phase = 'over';
       this.recordResult();
       UI.render();
-      UI.showGameOver();
+      // チュートリアル中は、通常の決着画面ではなくチュートリアル側の終了メッセージに任せる（二重表示を避ける）
+      if(typeof Tutorial==='undefined' || !Tutorial.active) UI.showGameOver();
       return true;
     }
     return false;
@@ -701,7 +702,7 @@ const Game = {
     this.recordResult();
     this.addLog('山札が尽きた。仮面を開き、最後の見比べが行われる。');
     UI.render();
-    UI.showGameOver();
+    if(typeof Tutorial==='undefined' || !Tutorial.active) UI.showGameOver();
   },
 
   // 現在選択中の難易度に対する戦績（勝敗・連勝）を更新して保存する
@@ -743,7 +744,7 @@ const Game = {
     s.phase = 'over';
     this.recordResult();
     UI.render();
-    UI.showGameOver();
+    if(typeof Tutorial==='undefined' || !Tutorial.active) UI.showGameOver();
   },
 
   advanceTurn(){
@@ -2166,7 +2167,7 @@ const UI = {
       ${revealRow}
       ${recordLine}
       <div class="start-actions" style="margin-top:18px;">
-        <button class="btn-grand" onclick="UI.restart()">もう一度舞踏会へ</button>
+        <button class="btn-grand" onclick="UI.restart()">${s.isOnline ? 'タイトルへ戻る' : 'もう一度舞踏会へ'}</button>
       </div>
       <div class="start-actions" style="margin-top:10px;">
         <button class="btn ghost" onclick="UI.shareResult()">結果を共有</button>
@@ -2212,9 +2213,38 @@ const UI = {
     }
   },
 
+  // タイトル画面からの開始：いきなり対局が始まらないよう、一度確認を挟む
+  confirmStartGame(){
+    const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
+    UI.showInfoModal(
+      '準備はよろしいですか？',
+      `「${diff.label}」との一夜が始まります。<br>手札は常に1枚。山札から引き、2枚のうち1枚を場に出して駆け引きを進めましょう。`,
+      null, false,
+      [
+        { label:'舞踏会へ', action:()=>{ Game.newGame(); } },
+        { label:'キャンセル', action:()=>{} },
+      ]
+    );
+  },
+
   restart(){
     document.getElementById('gameover-overlay').classList.remove('open');
-    Game.newGame();
+    const s = Game.state;
+    if(s && s.isOnline){
+      // オンライン対戦の再戦（同じ相手との連続対局）は現状未対応のため、タイトルへ戻る
+      UI.forceBackToStart();
+      return;
+    }
+    const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
+    UI.showInfoModal(
+      'もう一度、舞踏会へ',
+      `同じ相手（「${diff.label}」）と、新たな一夜を過ごしますか？`,
+      null, false,
+      [
+        { label:'はじめる', action:()=>{ Game.newGame(); } },
+        { label:'タイトルへ戻る', action:()=>{ UI.forceBackToStart(); } },
+      ]
+    );
   },
 };
 
