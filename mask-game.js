@@ -476,7 +476,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「給仕」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '給仕');
       this.finishResolve();
       return;
     }
@@ -502,7 +502,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「楽団員」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '楽団員');
       this.finishResolve();
       return;
     }
@@ -527,7 +527,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「仮面師」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '仮面師');
       this.finishResolve();
       return;
     }
@@ -595,7 +595,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「道化師」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '道化師');
       this.finishResolve();
       return;
     }
@@ -608,7 +608,7 @@ const Game = {
       this.finishResolve();
       return;
     }
-    // MASCARADEの黄金律：他者の効果で捨てさせられた場合、その仮面自体の効果は発動しない
+    // MASQUERADEの黄金律：他者の効果で捨てさせられた場合、その仮面自体の効果は発動しない
     const drawOne = (p, deckIdx) => {
       const oldCard = p.hand.pop();
       p.discard.push(oldCard);
@@ -633,7 +633,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「毒見役」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '毒見役');
       this.finishResolve();
       return;
     }
@@ -645,7 +645,7 @@ const Game = {
       this.finishResolve();
       return;
     }
-    // MASCARADEの黄金律：他者の効果で処分された場合、その仮面自体の効果は発動しない。しかも今回は誰にも公開されない。
+    // MASQUERADEの黄金律：他者の効果で処分された場合、その仮面自体の効果は発動しない。しかも今回は誰にも公開されない。
     const oldCard = target.hand.pop(); // あえて discard には加えない＝正体を明かさず密かに処分
     if(CPU.exactMemory){ delete CPU.exactMemory[t]; }
     this.addLog(`${actor.name}は${target.name}の仮面を、誰にも見せぬまま密かに毒杯へ沈めた。`);
@@ -664,7 +664,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「黒騎士」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '黒騎士');
       this.finishResolve();
       return;
     }
@@ -672,7 +672,7 @@ const Game = {
     const aDef = cardDef(aCard), tDef = cardDef(tCard);
     this.addLog(`${actor.name}と${target.name}は仮面の数字を見せ合った。（${actor.name}:${aDef.name} / ${target.name}:${tDef.name}）`);
 
-    // MASCARADEの黄金律：比べ合いによる公開だけでは脱落しない。数字の大小のみで決着する
+    // MASQUERADEの黄金律：比べ合いによる公開だけでは脱落しない。数字の大小のみで決着する
     let loserIdx = null, outcomeText;
     if(aDef.number < tDef.number){ loserIdx = actorIdx; outcomeText = `<b style="color:var(--gold-light)">${target.name}の勝ち。</b>${actor.name}は数字で及ばず、正体が露見する。`; }
     else if(tDef.number < aDef.number){ loserIdx = t; outcomeText = `<b style="color:var(--gold-light)">${actor.name}の勝ち。</b>${target.name}は数字で及ばず、正体が露見する。`; }
@@ -702,7 +702,7 @@ const Game = {
     const t = this.other(actorIdx);
     const target = this.playerAt(t);
     if(!target.alive || target.protectedFlag){
-      this.addLog(`${actor.name} は「大公」を使ったが、${target.protectedFlag?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+      this.notifyBlockedEffect(actorIdx, t, '大公');
       this.finishResolve();
       return;
     }
@@ -726,6 +726,25 @@ const Game = {
     UI.render();
     if(this.checkGameEnd()) return;
     this.advanceTurn();
+  },
+
+  // 対象が既に退場している場合、または貴婦人の加護で守られている場合に、効果が不発に終わったことを伝える。
+  // ログには常に記録し、さらに「効果を使った側」「守られた側」のどちらかがこの端末の視点であれば、
+  // 見逃さないようトーストでも分かりやすく知らせる。
+  notifyBlockedEffect(actorIdx, targetIdx, cardName){
+    const s = this.state;
+    const actor = this.playerAt(actorIdx);
+    const target = this.playerAt(targetIdx);
+    const protectedByLady = target.protectedFlag;
+    this.addLog(`${actor.name} は「${cardName}」を使ったが、${protectedByLady?'貴婦人の加護で無効化された':'対象は既に退場していた'}。`);
+    if(protectedByLady && typeof UI!=='undefined' && UI.showToast){
+      const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
+      if(myIdx===actorIdx){
+        UI.showToast(`🛡 ${target.name}は貴婦人の加護で守られている`, 'info');
+      } else if(myIdx===targetIdx){
+        UI.showToast('🛡 貴婦人の加護が、あなたを守った！', 'info');
+      }
+    }
   },
 
   eliminate(playerIdx, reason){
@@ -1124,7 +1143,7 @@ const Online = {
         if(settled) return;
         settled = true;
         clearTimeout(timeoutId);
-        console.error('[MASCARADE] Firebase匿名サインイン失敗:', err);
+        console.error('[MASQUERADE] Firebase匿名サインイン失敗:', err);
         this.panelState = 'error';
         const code = err && err.code ? err.code : '';
         if(code === 'auth/admin-restricted-operation' || code === 'auth/operation-not-allowed'){
@@ -1344,7 +1363,7 @@ const Online = {
         }, { merge:true });
       });
     }).catch((err)=>{
-      console.error('[MASCARADE] ランキングの記録に失敗:', err);
+      console.error('[MASQUERADE] ランキングの記録に失敗:', err);
     });
   },
 
@@ -1547,7 +1566,7 @@ const Tutorial = {
       id: 'gameover',
       trigger: (s)=> !!s.gameOver,
       title: '練習対局、終了です',
-      html: 'お疲れ様でした！これでMASCARADEの基本的な遊び方は身についたはずです。<br><br>タイトル画面に戻って、実際の対局を始めてみましょう。',
+      html: 'お疲れ様でした！これでMASQUERADEの基本的な遊び方は身についたはずです。<br><br>タイトル画面に戻って、実際の対局を始めてみましょう。',
       isLast: true,
     },
   ],
@@ -1563,8 +1582,8 @@ const Tutorial = {
 
   showIntro(){
     UI.showInfoModal(
-      'MASCARADEへようこそ',
-      '仮面舞踏会を舞台にした、1対1の心理戦カードゲームです。<br><br>手札は常に1枚。自分の番が来たら山札から1枚引いて2枚になり、そのうち1枚を場に出します。出した仮面の効果が発動し、時には相手を脱落させることもできます。<br><br>最後まで残るか、山札が尽きたときに一番大きい数字の仮面を持っていれば勝利です。<br><br>まずは、10種類の仮面それぞれの効果を順番に見ていきましょう。',
+      'MASQUERADEへようこそ',
+      '仮面舞踏会を舞台にした、1対1の心理戦カードゲームです。<br><br>基本の手札は1枚。自分の番が来たら山札から1枚引いて一時的に2枚になり、そのうち1枚を場に出します。出した仮面の効果が発動し、時には相手を脱落させることもできます。<br><br>最後まで残るか、山札が尽きたときに一番大きい数字の仮面を持っていれば勝利です。<br><br>まずは、10種類の仮面それぞれの効果を順番に見ていきましょう。',
       null, false,
       [
         { label:'仮面の効果を見る', action:()=>{ Tutorial.showCatalogStep(0); } },
@@ -1712,11 +1731,11 @@ const UI = {
     this.runSplashProgress();
   },
 
-  // 「MASCARADE」を1文字ずつ<span>に分解し、順にふわりと浮かび上がらせる
+  // 「MASQUERADE」を1文字ずつ<span>に分解し、順にふわりと浮かび上がらせる
   buildSplashTitle(){
     const el = document.getElementById('splash-title');
     if(!el) return;
-    const word = 'MASCARADE';
+    const word = 'MASQUERADE';
     el.innerHTML = word.split('').map((ch, i)=>
       `<span class="sl" style="animation-delay:${(0.25 + i*0.07).toFixed(2)}s">${ch}</span>`
     ).join('');
@@ -2066,7 +2085,7 @@ const UI = {
         数字が小さいほど「攻めの読み合い」向き。数字が大きいほど希少で、抱え続ける価値と危険の両方を持つ切り札です。
       </div>
       <div class="rd" style="margin:10px 0 6px; opacity:.85;">
-        <b style="color:var(--gold-light);">MASCARADEの黄金律</b>：カードの効果が発動するのは、自分の番に自分でその仮面を場に出した時のみ。他人の効果で捨てさせられた場合や、山札切れによる最後の公開では、効果は発動しません（ただし「仮面の主催者」の脱落だけは、捨てさせられた場合にも発動する唯一の例外です）。
+        <b style="color:var(--gold-light);">MASQUERADEの黄金律</b>：カードの効果が発動するのは、自分の番に自分でその仮面を場に出した時のみ。他人の効果で捨てさせられた場合や、山札切れによる最後の公開では、効果は発動しません（ただし「仮面の主催者」の脱落だけは、捨てさせられた場合にも発動する唯一の例外です）。
       </div>
       <div class="rd" style="margin:10px 0 6px; opacity:.85;">
         自分と対戦相手は、それぞれ独立した山札（同じ構成・別々のシャッフル）を使います。
@@ -2634,23 +2653,23 @@ const UI = {
     if(s.isOnline){
       text = s.winner
         ? (s.winner.id===myIdx
-            ? `MASCARADE ―仮面領の一夜― でオンライン対戦に勝利しました🎭`
-            : `MASCARADE ―仮面領の一夜― でオンライン対戦に挑戦中🎭 正体を隠し通せるか…？`)
-        : `MASCARADE ―仮面領の一夜― は引き分けに終わりました🎭`;
+            ? `MASQUERADE ―仮面領の一夜― でオンライン対戦に勝利しました🎭`
+            : `MASQUERADE ―仮面領の一夜― でオンライン対戦に挑戦中🎭 正体を隠し通せるか…？`)
+        : `MASQUERADE ―仮面領の一夜― は引き分けに終わりました🎭`;
     } else {
       const st = Game.stats[Game.difficulty] || { streak:0, best:0 };
       if(s.winner && s.winner.id===myIdx){
         text = st.streak>1
-          ? `MASCARADE ―仮面領の一夜― で${st.streak}連勝中🎭 正体を隠し通せるか、挑んでみませんか？`
-          : `MASCARADE ―仮面領の一夜― で勝利しました🎭`;
+          ? `MASQUERADE ―仮面領の一夜― で${st.streak}連勝中🎭 正体を隠し通せるか、挑んでみませんか？`
+          : `MASQUERADE ―仮面領の一夜― で勝利しました🎭`;
       } else if(s.winner && s.winner.id===Game.other(myIdx)){
-        text = `MASCARADE ―仮面領の一夜― に挑戦中🎭 正体を隠し通せるか…？`;
+        text = `MASQUERADE ―仮面領の一夜― に挑戦中🎭 正体を隠し通せるか…？`;
       } else {
-        text = `MASCARADE ―仮面領の一夜― で引き分けに終わりました🎭`;
+        text = `MASQUERADE ―仮面領の一夜― で引き分けに終わりました🎭`;
       }
     }
     if(typeof navigator!=='undefined' && navigator.share){
-      navigator.share({ title:'MASCARADE', text }).catch(()=>{});
+      navigator.share({ title:'MASQUERADE', text }).catch(()=>{});
     } else if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(()=>{
         UI.showToast('結果をコピーしました', 'info');
@@ -2668,7 +2687,7 @@ const UI = {
     const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
     UI.showInfoModal(
       '準備はよろしいですか？',
-      `「${diff.label}」との対局が始まります。<br>手札は常に1枚。山札から引き、2枚のうち1枚を場に出して駆け引きを進めましょう。`,
+      `「${diff.label}」との対局が始まります。<br>基本の手札は1枚。自分の番には山札から引いて2枚になり、そのうち1枚を場に出して駆け引きを進めましょう。`,
       null, false,
       [
         { label:'舞踏会へ', action:()=>{ Game.newGame(); } },

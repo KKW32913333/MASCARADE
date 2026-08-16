@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MASCARADE ― 仮面領の一夜</title>
+<title>MASQUERADE ― 仮面領の一夜</title>
 <meta name="description" content="正体を隠したまま王位を競う、一夜限りの仮面舞踏会カードゲーム">
 <meta name="theme-color" content="#1a1428">
 <link rel="manifest" href="./manifest.json">
@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="MASCARADE">
+<meta name="apple-mobile-web-app-title" content="MASQUERADE">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
@@ -142,7 +142,7 @@ body.table-mode{ overflow:hidden; }
 .splash-title{
   position:relative; z-index:1; margin:0; text-align:center;
   font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:600;
-  font-size:clamp(40px,13vw,74px); letter-spacing:.05em;
+  font-size:clamp(24px,9.5vw,70px); letter-spacing:.02em; white-space:nowrap;
   /* 以前はグラデーション文字（background-clip:text）を使っていたが、
      一部の端末（Android系WebViewやアプリ内ブラウザ等）で正しく描画されず、
      文字が実質見えなくなる不具合が確認されたため、確実に見える単色＋発光表現に変更した。 */
@@ -223,7 +223,7 @@ header.top .eyebrow{
 }
 header.top h1{
   font-family:'Cormorant Garamond', serif; font-weight:600; font-style:italic;
-  font-size:clamp(28px,7vw,38px); margin:2px 0 1px; letter-spacing:.04em;
+  font-size:clamp(24px,6.2vw,38px); margin:2px 0 1px; letter-spacing:.03em; white-space:nowrap;
   color:#f0d789;
   text-shadow:0 0 22px rgba(240,215,137,0.5), 0 0 4px rgba(240,215,137,0.4);
   opacity:0; animation:fadeUp .8s ease .18s forwards;
@@ -243,7 +243,7 @@ header.top .divider{
   header.top .eyebrow, header.top h1, header.top .subtitle, header.top .divider{ animation:none; opacity:1; }
 }
 
-/* 舞踏会画面表示中は「MASCARADE」のみのコンパクトな見出しにする */
+/* 舞踏会画面表示中は「MASQUERADE」のみのコンパクトな見出しにする */
 header.top.compact{ padding:8px 10px 4px; }
 header.top.compact .eyebrow,
 header.top.compact .subtitle,
@@ -754,7 +754,7 @@ body.table-mode footer.credits{ display:none; }
   <div class="splash-particles" id="splash-particles" aria-hidden="true"></div>
   <div class="splash-logo-wrap">
     <div class="splash-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
-    <h1 class="splash-title" id="splash-title" aria-label="MASCARADE"></h1>
+    <h1 class="splash-title" id="splash-title" aria-label="MASQUERADE"></h1>
   </div>
   <div class="splash-subtitle">仮面舞踏会と貴族たちの密約</div>
   <div class="splash-divider" aria-hidden="true">
@@ -774,7 +774,7 @@ body.table-mode footer.credits{ display:none; }
     <button class="bgm-toggle" id="bgm-toggle" onclick="UI.toggleBgm()" title="BGMのオン/オフ" aria-label="BGMのオン/オフ">🎵</button>
     <button class="sfx-toggle" id="sfx-toggle" onclick="UI.toggleSfx()" title="効果音のオン/オフ" aria-label="効果音のオン/オフ">🔊</button>
     <div class="eyebrow">仮面領の一夜</div>
-    <h1>MASCARADE</h1>
+    <h1>MASQUERADE</h1>
     <div class="subtitle">王位継承を賭けた、一夜限りの舞踏会</div>
     <div class="divider"></div>
   </header>
@@ -787,7 +787,7 @@ body.table-mode footer.credits{ display:none; }
   <!-- ============ START SCREEN ============ -->
   <div id="start-screen">
     <p class="lede">
-      手札は常に1枚。山札から1枚引き、2枚のうち1枚を場に出すと、そのカードの効果が発動します。最後まで残った人、または一番大きい数字を持っていた人の勝ちです。
+      基本の手札は1枚。自分の番には山札から1枚引いて2枚になり、そのうち1枚を場に出すと、そのカードの効果が発動します。最後まで残った人、または一番大きい数字を持っていた人の勝ちです。
     </p>
     <div class="rules-toggle-wrap">
       <button class="link-btn" id="rules-toggle-btn" onclick="UI.toggleRules()">▾ 仮面の一覧とルールを見る</button>
@@ -877,7 +877,7 @@ body.table-mode footer.credits{ display:none; }
 
   <div id="log-panel"><button class="lg-close" onclick="UI.toggleLog()" aria-label="閉じる"></button></div>
 
-  <footer class="credits">MASCARADE — an original masquerade deduction card game</footer>
+  <footer class="credits">MASQUERADE — an original masquerade deduction card game</footer>
 </div>
 
 <!-- peek / info modal -->

@@ -1,6 +1,6 @@
 {
-  "name": "MASCARADE ― 仮面領の一夜",
-  "short_name": "MASCARADE",
+  "name": "MASQUERADE ― 仮面領の一夜",
+  "short_name": "MASQUERADE",
   "description": "正体を隠したまま王位を競う、一夜限りの仮面舞踏会カードゲーム",
   "start_url": "./index.html",
   "scope": "./",
