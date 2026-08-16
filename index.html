@@ -176,7 +176,7 @@ body.table-mode{ overflow:hidden; }
 }
 .splash-sub{
   font-size:11.5px; letter-spacing:.14em; color:#cdc3e6; font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-  min-height:1.4em; transition:opacity .3s ease;
+  min-height:1.4em; transition:opacity .15s ease;
 }
 .splash-start-btn{
   position:relative; z-index:1; margin-top:6px;
@@ -386,23 +386,16 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
   padding:2px 2px 4px; letter-spacing:.03em; flex:0 0 auto; gap:8px;
 }
 .status-strip .turn-badge{
-  color:var(--gold-dim); font-family:'Shippori Mincho',serif; letter-spacing:.08em;
-  font-size:13px; white-space:nowrap;
+  color:var(--gold-dim); font-family:'Shippori Mincho',serif; letter-spacing:.06em;
+  font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .status-strip .status-right{ display:flex; align-items:center; gap:10px; }
-.status-strip .deck-count{ display:flex; align-items:center; gap:8px; }
-.deck-stack{ position:relative; width:22px; height:26px; flex:0 0 auto; animation:deckFloat 3.2s ease-in-out infinite; }
-.deck-stack .layer{
-  position:absolute; width:16px; height:22px; border-radius:2px;
-  background:linear-gradient(135deg,#4a3966,#382a52);
-  border:1px solid var(--gold-dim);
-  box-shadow:0 2px 4px rgba(0,0,0,0.4);
+
+.deck-count-mini{
+  display:flex; align-items:center; gap:4px; flex:0 0 auto; white-space:nowrap;
+  font-family:'Shippori Mincho',serif; font-size:12px; color:var(--gold-dim);
 }
-.deck-stack .layer:nth-child(1){ top:6px; left:6px; opacity:.6; }
-.deck-stack .layer:nth-child(2){ top:3px; left:3px; opacity:.8; }
-.deck-stack .layer:nth-child(3){ top:0; left:0; }
-@keyframes deckFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-2px); } }
-@media (prefers-reduced-motion: reduce){ .deck-stack{ animation:none; } }
+.deck-count-mini .deck-mini-icon{ font-size:13px; opacity:.85; }
 
 .zone{
   background:rgba(201,150,21,0.035); border:1px solid rgba(201,150,21,0.18);
@@ -791,10 +784,6 @@ body.table-mode footer.credits{ display:none; }
       <button class="icon-btn" onclick="UI.backToStart()" title="タイトルへ戻る" aria-label="タイトルへ戻る">← タイトル</button>
       <div class="turn-badge" id="turn-badge">―</div>
       <div class="status-right">
-        <div class="deck-count" title="山札：あなた／対戦相手">
-          <div class="deck-stack"><div class="layer"></div><div class="layer"></div><div class="layer"></div></div>
-          <span id="deck-count-text">山札 0／0</span>
-        </div>
         <button class="icon-btn" onclick="UI.showHelpModal()" title="仮面の説明" aria-label="仮面の説明を見る">？</button>
         <button class="icon-btn" onclick="UI.toggleLog()" title="舞踏会の記録" aria-label="舞踏会の記録を開く">📜</button>
       </div>
@@ -806,6 +795,9 @@ body.table-mode footer.credits{ display:none; }
         <div class="player-name">🎭 <span id="opp-name">仮面卿</span>
           <span class="protect-icon" id="opp-protect">🛡 加護中</span>
           <span class="eliminated-tag" id="opp-eliminated">退場</span>
+        </div>
+        <div class="deck-count-mini" id="opp-deck-count" title="対戦相手の山札の残り枚数">
+          <span class="deck-mini-icon" aria-hidden="true">🂠</span><span id="opp-deck-count-text">0</span>
         </div>
       </div>
       <div class="hand-area" id="opp-hand"></div>
@@ -824,6 +816,9 @@ body.table-mode footer.credits{ display:none; }
         <div class="player-name">🕯 <span id="me-name">あなた</span>
           <span class="protect-icon" id="me-protect">🛡 加護中</span>
           <span class="eliminated-tag" id="me-eliminated">退場</span>
+        </div>
+        <div class="deck-count-mini" id="me-deck-count" title="自分の山札の残り枚数">
+          <span class="deck-mini-icon" aria-hidden="true">🂠</span><span id="me-deck-count-text">0</span>
         </div>
       </div>
       <div class="hand-area" id="me-hand"></div>

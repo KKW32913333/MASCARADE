@@ -881,12 +881,12 @@ const CPU = {
  * 想定した割り切りですので、ご了承ください。
  */
 const firebaseConfig = {
-  apiKey: "AIzaSyAG624yygT8gBg6BoQP0xWvZM1oI-ynjms",
-  authDomain: "mascarade-8bfca.firebaseapp.com",
-  projectId: "mascarade-8bfca",
-  storageBucket: "mascarade-8bfca.firebasestorage.app",
-  messagingSenderId: "374518333404",
-  appId: "1:374518333404:web:26860a011e87c5da3a9919",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
 };
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 紛らわしい 0/O・1/I/L を除外
@@ -1190,10 +1190,18 @@ const UI = {
     let step = 0;
     const setMessage = ()=>{
       sub.style.opacity = 0;
-      setTimeout(()=>{
+      // 「透明になり切ってから次の文言に差し替える」ことを、決め打ちの時間ではなく
+      // 実際のフェードアウト完了（transitionend）を待って行う。
+      // タイミングのズレで新旧の文言が入れ替わり際に重なって見える不具合を避けるため。
+      let applied = false;
+      const apply = ()=>{
+        if(applied) return;
+        applied = true;
         sub.textContent = messages[step];
         sub.style.opacity = 1;
-      }, 180);
+      };
+      sub.addEventListener('transitionend', apply, { once:true });
+      setTimeout(apply, 220); // transitionendが発火しない環境（reduced-motion等）向けの保険
     };
     setMessage();
     // 二重rAFで「0%が確実に1フレーム描画されてから100%へ」変化させる。
@@ -1516,14 +1524,11 @@ const UI = {
     const topPlayer = s.players[topIdx];
 
     document.getElementById('turn-badge').textContent =
-      s.gameOver ? '舞踏会、終幕' : `${s.players[s.turnIndex].name}の番`;
-    document.getElementById('deck-count-text').textContent =
-      `山札 ${s.decks[bottomIdx].length}／${s.decks[topIdx].length}`;
-    document.getElementById('deck-count-text').setAttribute('aria-label',
-      `山札：${bottomPlayer.name} ${s.decks[bottomIdx].length}枚、${topPlayer.name} ${s.decks[topIdx].length}枚`);
+      s.gameOver ? '舞踏会、終幕' : `第${s.turnCount}巡・${s.players[s.turnIndex].name}の番`;
 
     // 上段（対戦相手）
     document.getElementById('opp-name').textContent = topPlayer.name;
+    document.getElementById('opp-deck-count-text').textContent = s.decks[topIdx].length;
     document.getElementById('opp-protect').classList.toggle('show', topPlayer.protectedFlag);
     document.getElementById('opp-eliminated').classList.toggle('show', !topPlayer.alive);
     const oppThinking = !s.gameOver && (s.phase==='choose' || s.phase==='resolve') &&
@@ -1535,6 +1540,7 @@ const UI = {
 
     // 下段（あなた）
     document.getElementById('me-name').textContent = bottomPlayer.name;
+    document.getElementById('me-deck-count-text').textContent = s.decks[bottomIdx].length;
     document.getElementById('me-protect').classList.toggle('show', bottomPlayer.protectedFlag);
     document.getElementById('me-eliminated').classList.toggle('show', !bottomPlayer.alive);
     const meCanChoose = !s.gameOver && s.phase==='choose' && !bottomPlayer.isCPU && bottomIdx===s.turnIndex;
