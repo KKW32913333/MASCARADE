@@ -251,6 +251,7 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .lede b{ color:var(--gold-dim); font-weight:700; }
 
 .rules-toggle-wrap{ text-align:center; margin-bottom:8px; }
+.tutorial-link-wrap{ text-align:center; margin-top:10px; }
 .link-btn{
   background:none; border:none; color:var(--gold); font-family:'Zen Maru Gothic',sans-serif;
   font-size:13px; letter-spacing:.06em; cursor:pointer; border-bottom:1px dotted var(--gold-dim); padding:2px 4px;
@@ -524,6 +525,13 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 #action-panel .sub-desc{ display:block; font-family:'Zen Maru Gothic',sans-serif; font-size:11.5px; color:var(--ivory-dim); margin-top:4px; line-height:1.6; }
 #action-panel .sub{ font-size:11.5px; color:var(--ivory-dim); margin-top:-6px; margin-bottom:12px; }
 .choice-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.quick-chat-list{ display:flex; flex-direction:column; gap:8px; margin:14px 0; max-height:50vh; overflow-y:auto; }
+.quick-chat-btn{
+  font-family:'Zen Maru Gothic',sans-serif; font-size:13px; text-align:left;
+  background:rgba(184,134,11,0.07); border:1px solid rgba(184,134,11,0.3); color:var(--ivory);
+  padding:10px 14px; border-radius:10px; cursor:pointer; transition:background .15s ease;
+}
+.quick-chat-btn:hover{ background:rgba(184,134,11,0.16); }
 .btn{
   font-family:'Zen Maru Gothic',sans-serif; font-size:13px; letter-spacing:.03em;
   background:rgba(201,150,21,0.08); color:var(--ivory); border:1px solid rgba(201,150,21,0.4);
@@ -775,6 +783,10 @@ body.table-mode footer.credits{ display:none; }
       <button class="btn-grand" onclick="Game.newGame()">舞踏会をはじめる</button>
     </div>
 
+    <div class="tutorial-link-wrap">
+      <button class="link-btn" onclick="Tutorial.start()">▾ はじめての方はこちら（チュートリアル）</button>
+    </div>
+
     <div class="start-deco" id="start-deco" aria-hidden="true"></div>
   </div>
 
@@ -784,6 +796,7 @@ body.table-mode footer.credits{ display:none; }
       <button class="icon-btn" onclick="UI.backToStart()" title="タイトルへ戻る" aria-label="タイトルへ戻る">← タイトル</button>
       <div class="turn-badge" id="turn-badge">―</div>
       <div class="status-right">
+        <button class="icon-btn" id="quick-chat-btn" onclick="UI.showQuickChatPicker()" title="簡単な質問を送る" aria-label="簡単な質問を送る" style="display:none;">💬</button>
         <button class="icon-btn" onclick="UI.showHelpModal()" title="仮面の説明" aria-label="仮面の説明を見る">？</button>
         <button class="icon-btn" onclick="UI.toggleLog()" title="舞踏会の記録" aria-label="舞踏会の記録を開く">📜</button>
       </div>

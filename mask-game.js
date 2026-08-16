@@ -54,6 +54,18 @@ const CARD_DEFS = {
 };
 const CARD_ORDER = ['attendant','musician','fortune','noble_lady','spy','jester','taster','black_knight','grand_duke','masked_host'];
 
+// オンライン対戦中、対戦相手に送れる定型文（自由入力ではなく一覧からの選択のみ）
+const QUICK_CHAT_PHRASES = [
+  'こんにちは、よろしくお願いします',
+  'お手並み拝見といきましょう',
+  'その手には乗りませんよ？',
+  '余裕そうですね…',
+  'なかなか読めませんね',
+  '少し様子を見ますね',
+  'お見事です',
+  'そろそろ決着をつけましょう',
+];
+
 /* ---------------------------------------------------------------------
  * 2. ユーティリティ
  * ------------------------------------------------------------------- */
@@ -752,6 +764,67 @@ const CPU = {
   rangeMemory: {},  // { playerIdx: boolean } 楽団員で知った「6以上/5以下」の大まかな情報
   bottomMemory: null, // 旧効果で見た「山札の底（最後の1枚）」の記憶（現在は未使用）
 
+  // 山札・捨て札から見えている情報をもとに、まだ場に出ていない数字の残り枚数を数える
+  // （excludeIdx を指定すると、そのプレイヤー自身の手札も「見えている」ものとして除外する）
+  computeRemainingPool(excludeIdx){
+    const s = Game.state;
+    const remaining = {};
+    CARD_ORDER.forEach(id=>{ const d = cardDef(id); remaining[d.number] = d.count; });
+    const seen = [];
+    s.players.forEach(pl=>seen.push(...pl.discard));
+    if(excludeIdx!==undefined) seen.push(...s.players[excludeIdx].hand);
+    seen.forEach(cid=>{
+      const n = cardDef(cid).number;
+      if(remaining[n]!==undefined) remaining[n] = Math.max(0, remaining[n]-1);
+    });
+    return remaining; // { number: 残り枚数 }
+  },
+
+  // 相手の手札の強さ（数字）を、見えている情報からざっくり見積もる
+  estimateOpponentStrength(actorIdx){
+    const t = Game.other(actorIdx);
+    if(CPU.exactMemory && CPU.exactMemory[t] !== undefined){
+      return cardDef(CPU.exactMemory[t]).number; // 仮面師などで正確に分かっている
+    }
+    const pool = this.computeRemainingPool(actorIdx);
+    let total=0, weighted=0;
+    Object.keys(pool).forEach(n=>{ total += pool[n]; weighted += Number(n)*pool[n]; });
+    let avg = total>0 ? weighted/total : 5.5;
+    if(CPU.rangeMemory[t] !== undefined){
+      // 楽団員で「6以上/5以下」が分かっていれば、その方向に見積もりを寄せる
+      avg = CPU.rangeMemory[t] ? Math.max(avg, 7.5) : Math.min(avg, 3.5);
+    }
+    return avg;
+  },
+
+  // 給仕（数字当て）を使った場合の的中確率を、残りプールの偏り具合からざっくり見積もる
+  estimateGuessConfidence(actorIdx){
+    const t = Game.other(actorIdx);
+    if(CPU.exactMemory && CPU.exactMemory[t] !== undefined) return 1; // 確実に当たる
+    const pool = this.computeRemainingPool(actorIdx);
+    let total = 0;
+    Object.keys(pool).forEach(n=>{
+      if(CPU.rangeMemory[t] !== undefined){
+        const isHigh = CPU.rangeMemory[t];
+        if(isHigh && Number(n) < 6) return;
+        if(!isHigh && Number(n) > 5) return;
+      }
+      total += pool[n];
+    });
+    if(total<=0) return 0.1;
+    // 候補が絞られているほど的中率が高い（最大でも1/candidateCountに近似）
+    let candidateNumbers = 0;
+    Object.keys(pool).forEach(n=>{
+      if(CPU.rangeMemory[t] !== undefined){
+        const isHigh = CPU.rangeMemory[t];
+        if(isHigh && Number(n) < 6) return;
+        if(!isHigh && Number(n) > 5) return;
+      }
+      if(pool[n]>0) candidateNumbers++;
+    });
+    return candidateNumbers>0 ? 1/candidateNumbers : 0.1;
+  },
+
   takeTurn(){
     const s = Game.state;
     if(!s) return;
@@ -772,20 +845,30 @@ const CPU = {
       chosen = hand[Math.floor(Math.random()*hand.length)];
     } else {
       const t = Game.other(idx);
+      const oppStrength = this.estimateOpponentStrength(idx);
       const scored = hand.map((c,i)=>{
         const d = cardDef(c);
         const n = d.number;
         const otherCard = hand[1-i];
         let score = (10-n) + Math.random() * (diffId==='wily' ? 2 : 4);
         if(diffId==='wily' && otherCard){
-          // 老獪：もう1枚の状況を踏まえて有利な効果を優先する
           const otherNum = cardDef(otherCard).number;
-          if(d.effect==='guessRank' && CPU.rangeMemory[t]!==undefined) score += 4;
-          if(d.effect==='compareHand'){
-            if(otherNum>=6) score += 4;
-            else if(otherNum<=3) score -= 3;
+          // 給仕：残りプールの偏りから、当てやすい状況ほど優先する（捨て札からの数字推測の強化）
+          if(d.effect==='guessRank'){
+            const confidence = this.estimateGuessConfidence(idx);
+            score += confidence * 8;
           }
-          if(d.effect==='protectSelf' && (otherCard==='grand_duke' || otherCard==='masked_host')) score += 4;
+          // 黒騎士：もう1枚の方が相手の見積もりより強ければ有利、弱ければ避ける
+          if(d.effect==='compareHand'){
+            if(otherNum > oppStrength + 0.5) score += 4;
+            else if(otherNum < oppStrength - 0.5) score -= 4;
+          }
+          // 大公：相手が強そうな時ほど、番を封じる価値が高い
+          if(d.effect==='sealTurn' && oppStrength >= 6.5) score += 3;
+          // 貴婦人：もう1枚が高価値なほど、温存して守る価値が高い（防御的なカード温存）
+          if(d.effect==='protectSelf' && otherCard){
+            score += Math.max(0, otherNum - 4) * 1.3;
+          }
         }
         return { c, score };
       });
@@ -806,32 +889,18 @@ const CPU = {
   },
 
   guessWeightedNumber(actorIdx){
-    const s = Game.state;
     const diffId = Game.difficulty || 'courtier';
     if(diffId==='novice'){
       // 新米：情報を活かさずほぼランダムに宣言する
       return 1 + Math.floor(Math.random()*10);
     }
     // 仮面師などで対象の正体を正確に知っていれば、迷わずそれを宣言する
-    const targetIdx0 = Game.other(actorIdx);
-    if(CPU.exactMemory && CPU.exactMemory[targetIdx0] !== undefined){
-      return cardDef(CPU.exactMemory[targetIdx0]).number;
-    }
-    const remaining = {}; // number -> 残数
-    CARD_ORDER.forEach(id=>{
-      const d = cardDef(id);
-      remaining[d.number] = d.count;
-    });
-    // 見えている札（捨て札全部、自分の手札）を減算
-    const seen = [];
-    s.players.forEach(pl=>seen.push(...pl.discard));
-    seen.push(...s.players[actorIdx].hand);
-    seen.forEach(cid=>{
-      const n = cardDef(cid).number;
-      if(remaining[n]!==undefined) remaining[n] = Math.max(0, remaining[n]-1);
-    });
-    // 楽団員で知った「6以上/5以下」の大まかな記憶があれば、その範囲内から絞り込む
     const t = Game.other(actorIdx);
+    if(CPU.exactMemory && CPU.exactMemory[t] !== undefined){
+      return cardDef(CPU.exactMemory[t]).number;
+    }
+    const remaining = this.computeRemainingPool(actorIdx);
+    // 楽団員で知った「6以上/5以下」の大まかな記憶があれば、その範囲内から絞り込む
     let pool = [];
     Object.keys(remaining).forEach(n=>{
       for(let i=0;i<remaining[n];i++) pool.push(Number(n));
@@ -1029,9 +1098,17 @@ const Online = {
 
   _listen(code){
     if(this.unsubscribe) this.unsubscribe();
+    this.lastSeenChatAt = 0;
     this.unsubscribe = this.db.collection('rooms').doc(code).onSnapshot((doc)=>{
       if(!doc.exists) return;
       const data = doc.data();
+      // 相手からの簡易メッセージを検知して表示する（自分が送った分は表示しない）
+      if(data.chatAt && data.chatAt > (this.lastSeenChatAt||0)){
+        this.lastSeenChatAt = data.chatAt;
+        if(data.chatFrom && data.chatFrom !== this.uid && data.chatText){
+          if(typeof UI!=='undefined' && UI.showChatBubble) UI.showChatBubble(data.chatText);
+        }
+      }
       if(data.status==='playing' && data.hostUid && data.guestUid){
         this._enterGame(data);
       } else if(data.status==='waiting'){
@@ -1064,6 +1141,16 @@ const Online = {
     if(!document.getElementById('table').classList.contains('open')) UI.showTable();
     UI.render();
     Game._applyingRemote = false;
+  },
+
+  // 対戦相手へ簡易メッセージ（定型文）を送る
+  sendChat(text){
+    if(!this.roomCode || !this.db) return;
+    this.db.collection('rooms').doc(this.roomCode).update({
+      chatText: text,
+      chatFrom: this.uid,
+      chatAt: Date.now(),
+    }).catch((err)=>{ console.error('chat send failed', err); });
   },
 
   // 自分の操作でGame.stateが変化した時、少し間を置いてFirestoreへ書き戻す（連続書き込みをまとめる）
@@ -1103,6 +1190,85 @@ const Online = {
     this.panelState = 'idle';
     this.errorMsg = '';
     UI.renderOnlinePanel();
+  },
+};
+
+/* ---------------------------------------------------------------------
+ * 4c. チュートリアル（初めての方向けの練習対局ガイド）
+ * ------------------------------------------------------------------- */
+const Tutorial = {
+  active: false,
+  shownSteps: null, // Set
+
+  // 各ステップは、現在の Game.state（s）を見て「今このタイミングで見せるべきか」を判定する。
+  // 一度見せたステップは二度と表示しない。render() のたびに先頭から順にチェックし、
+  // 一致した最初の未表示ステップだけをその場で1つ表示する（同時に複数出さない）。
+  steps: [
+    {
+      id: 'intro',
+      trigger: ()=>true, // 練習対局が始まった直後、真っ先に表示
+      title: 'MASCARADEへようこそ',
+      html: '仮面舞踏会を舞台にした、1対1の心理戦カードゲームです。<br><br>手札は常に1枚。自分の番が来たら山札から1枚引いて2枚になり、そのうち1枚を場に出します。出した仮面の効果が発動し、時には相手を脱落させることもできます。<br><br>最後まで残るか、山札が尽きたときに一番大きい数字の仮面を持っていれば勝利です。<br><br>まずは実際の練習対局で試してみましょう。',
+    },
+    {
+      id: 'choose',
+      trigger: (s)=> s.phase==='choose' && !s.players[s.turnIndex].isCPU,
+      title: '仮面を選びましょう',
+      html: '下段の「あなた」の手札に、仮面が2枚あります。<br><br>1枚をタップして選び、「場に出す」ボタンを押してみましょう。数字が小さい仮面は比較的安全に出しやすく、大きい仮面ほど手元に残す価値があります。',
+    },
+    {
+      id: 'resolve',
+      trigger: (s)=> s.phase==='resolve' && !!s.pendingCard,
+      title: '仮面の効果が発動します',
+      html: '場に出した仮面の効果です。相手を対象にする効果は、「発動する」ボタンを押すと実際に発動します。<br><br>効果で得た情報（相手の手札の範囲や正体など）は、次以降の駆け引きに活かしましょう。',
+    },
+    {
+      id: 'eliminate',
+      trigger: (s)=> s.players.some(p=>!p.alive),
+      title: '脱落について',
+      html: '手札の数字を言い当てられたり、勝負に負けたりすると脱落します。<br><br>「貴婦人」を出すと、次の自分の番までは他人の効果を受けなくなります。危険を感じたら、貴婦人を手元に残しておくのも有効な戦略です。',
+    },
+    {
+      id: 'gameover',
+      trigger: (s)=> !!s.gameOver,
+      title: '練習対局、終了です',
+      html: 'お疲れ様でした！これでMASCARADEの基本的な遊び方は身についたはずです。<br><br>タイトル画面に戻って、実際の対局を始めてみましょう。',
+      isLast: true,
+    },
+  ],
+
+  start(){
+    this.active = true;
+    this.shownSteps = new Set();
+    this._savedDifficulty = Game.difficulty; // 元の難易度設定を退避し、チュートリアル終了後に戻す
+    Game.mode = 'cpu';
+    Game.difficulty = 'novice'; // ここでは保存しない（チュートリアル専用の一時的な変更）
+    Game.newGame();
+  },
+
+  end(){
+    this.active = false;
+    if(this._savedDifficulty){ Game.difficulty = this._savedDifficulty; this._savedDifficulty = null; }
+    UI.forceBackToStart();
+  },
+
+  checkSteps(){
+    if(!this.active || !Game.state) return;
+    const s = Game.state;
+    for(const step of this.steps){
+      if(this.shownSteps.has(step.id)) continue;
+      if(step.trigger(s)){
+        this.shownSteps.add(step.id);
+        if(step.isLast){
+          UI.showInfoModal(step.title, step.html, null, false, [
+            { label:'タイトルへ戻る', action:()=>{ Tutorial.end(); } },
+          ]);
+        } else {
+          UI.showInfoModal(step.title, step.html, null, true);
+        }
+        break; // 1回のチェックで表示するのは1ステップのみ
+      }
+    }
   },
 };
 
@@ -1493,6 +1659,11 @@ const UI = {
     const header = document.getElementById('site-header');
     if(header) header.classList.remove('compact');
     if(Game.state && Game.state.isOnline && typeof Online!=='undefined' && Online.leaveRoom) Online.leaveRoom();
+    // チュートリアル中にどの経路で戻ってきても、必ず後片付け（元の難易度設定への復元など）を行う
+    if(typeof Tutorial!=='undefined' && Tutorial.active){
+      Tutorial.active = false;
+      if(Tutorial._savedDifficulty){ Game.difficulty = Tutorial._savedDifficulty; Tutorial._savedDifficulty = null; }
+    }
     Game.state = null;
   },
 
@@ -1515,6 +1686,8 @@ const UI = {
 
     document.getElementById('turn-badge').textContent =
       s.gameOver ? '舞踏会、終幕' : `第${s.turnCount}巡・${s.players[s.turnIndex].name}の番`;
+    const quickChatBtn = document.getElementById('quick-chat-btn');
+    if(quickChatBtn) quickChatBtn.style.display = (s.isOnline && !s.gameOver) ? '' : 'none';
 
     // 上段（対戦相手）
     document.getElementById('opp-name').textContent = topPlayer.name;
@@ -1550,6 +1723,11 @@ const UI = {
     // オンライン対戦：自分の操作による変化だけをFirestoreへ書き戻す（受信した更新の反映では書き戻さない）
     if(s.isOnline && !Game._applyingRemote && typeof Online!=='undefined' && Online.scheduleSync){
       Online.scheduleSync();
+    }
+
+    // チュートリアル進行中は、状況に応じたヒントを表示する
+    if(typeof Tutorial!=='undefined' && Tutorial.active){
+      Tutorial.checkSteps();
     }
   },
 
@@ -1806,6 +1984,38 @@ const UI = {
     setTimeout(()=>el.remove(), duration);
   },
 
+  // 対戦相手から届いた簡易メッセージを吹き出し風に表示する
+  showChatBubble(text){
+    const s = Game.state;
+    const oppName = (s && s.myIdx!==undefined) ? s.players[Game.other(s.myIdx)].name : '対戦相手';
+    this.showToast(`💬 ${oppName}「${text}」`, 'info', 3600);
+    if(typeof SFX!=='undefined') SFX.turn();
+  },
+
+  // 定型文の一覧から選んで相手に送る、簡易チャットの選択画面を開く
+  showQuickChatPicker(){
+    if(!Game.state || !Game.state.isOnline) return;
+    const overlay = document.getElementById('info-overlay');
+    const box = document.getElementById('info-box');
+    box.innerHTML = `
+      <h4>簡単な質問を送る</h4>
+      <p>対戦相手に送る一言を選んでください。</p>
+      <div class="quick-chat-list" id="quick-chat-list">
+        ${QUICK_CHAT_PHRASES.map((text,i)=>`<button class="quick-chat-btn" data-qc="${i}">${text}</button>`).join('')}
+      </div>
+      <div class="choice-row"><button class="btn" id="quick-chat-cancel">キャンセル</button></div>
+    `;
+    overlay.classList.add('open');
+    QUICK_CHAT_PHRASES.forEach((text,i)=>{
+      box.querySelector(`[data-qc="${i}"]`).onclick = ()=>{
+        overlay.classList.remove('open');
+        Online.sendChat(text);
+        this.showToast(`💬 あなた「${text}」`, 'info', 2200);
+      };
+    });
+    document.getElementById('quick-chat-cancel').onclick = ()=>{ overlay.classList.remove('open'); };
+  },
+
   flashEliminated(playerIdx){
     const zoneId = playerIdx===0 ? 'player-zone' : 'opponent-zone';
     const zone = document.getElementById(zoneId);
@@ -1988,5 +2198,5 @@ if('serviceWorker' in navigator){
 
 /* テスト用フック（jsdomヘッドレステストから利用。通常のプレイには使用しない） */
 if(typeof window!=='undefined'){
-  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS, Online };
+  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS, Online, Tutorial, QUICK_CHAT_PHRASES };
 }
