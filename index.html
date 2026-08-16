@@ -208,6 +208,15 @@ header.top{
 .sfx-toggle:hover{ background:rgba(212,175,55,0.18); }
 .sfx-toggle.muted{ opacity:.55; }
 header.top.compact .sfx-toggle{ top:6px; right:8px; width:26px; height:26px; font-size:12px; }
+.bgm-toggle{
+  position:absolute; top:12px; right:52px; z-index:2;
+  background:rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.3); color:var(--ivory);
+  width:34px; height:34px; border-radius:50%; font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .15s ease, opacity .2s ease;
+}
+.bgm-toggle:hover{ background:rgba(212,175,55,0.18); }
+.bgm-toggle.muted{ opacity:.55; }
+header.top.compact .bgm-toggle{ top:6px; right:38px; width:26px; height:26px; font-size:12px; }
 header.top .eyebrow{
   letter-spacing:.35em; font-size:10px; color:var(--gold); text-transform:uppercase; opacity:0;
   animation:fadeUp .7s ease .05s forwards;
@@ -220,8 +229,8 @@ header.top h1{
   opacity:0; animation:fadeUp .8s ease .18s forwards;
   transition:font-size .25s ease;
 }
-header.top .subtitle{ font-family:'Shippori Mincho',serif; font-size:12.5px; letter-spacing:.16em; color:var(--ivory-dim);
-  opacity:0; animation:fadeUp .8s ease .32s forwards;
+header.top .subtitle{ font-family:'Shippori Mincho',serif; font-size:clamp(11px,3.4vw,12.5px); letter-spacing:.14em; color:var(--ivory-dim);
+  white-space:nowrap; opacity:0; animation:fadeUp .8s ease .32s forwards;
 }
 header.top .divider{
   width:110px; height:1px; margin:8px auto 0; position:relative; overflow:hidden;
@@ -686,6 +695,7 @@ body.table-mode footer.credits{ display:none; }
   header.top .eyebrow, header.top .subtitle, header.top .divider{ display:none; }
   header.top h1{ font-size:19px; margin:0; }
   .sfx-toggle{ width:24px; height:24px; font-size:11px; top:6px; right:8px; }
+  .bgm-toggle{ width:24px; height:24px; font-size:11px; top:6px; right:36px; }
   #start-screen{ padding:2px 6px 6px; }
   .lede{ font-size:12px; line-height:1.5; margin:4px auto 8px; }
   .rules-toggle-wrap{ margin-bottom:4px; }
@@ -744,12 +754,18 @@ body.table-mode footer.credits{ display:none; }
 
 <div id="app">
   <header class="top" id="site-header">
+    <button class="bgm-toggle" id="bgm-toggle" onclick="UI.toggleBgm()" title="BGMのオン/オフ" aria-label="BGMのオン/オフ">🎵</button>
     <button class="sfx-toggle" id="sfx-toggle" onclick="UI.toggleSfx()" title="効果音のオン/オフ" aria-label="効果音のオン/オフ">🔊</button>
     <div class="eyebrow">仮面領の一夜</div>
     <h1>MASCARADE</h1>
-    <div class="subtitle">―マスカレード―　王位継承を賭けた、一夜限りの舞踏会</div>
+    <div class="subtitle">王位継承を賭けた、一夜限りの舞踏会</div>
     <div class="divider"></div>
   </header>
+
+  <audio id="bgm-audio" loop preload="none">
+    <source src="./bgm.ogg" type="audio/ogg">
+    <source src="./bgm.mp3" type="audio/mpeg">
+  </audio>
 
   <!-- ============ START SCREEN ============ -->
   <div id="start-screen">

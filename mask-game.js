@@ -206,6 +206,62 @@ const SFX = {
 };
 
 /* ---------------------------------------------------------------------
+ * 2b. BGM（背景音楽）
+ * ------------------------------------------------------------------- */
+const BGM_KEY = 'mascarade_bgm_v1';
+const BGM = {
+  el: null,
+  started: false, // ブラウザの自動再生制限のため、最初のユーザー操作後に一度だけ再生を試みる
+  enabled: (function(){
+    try{
+      if(typeof localStorage==='undefined') return true;
+      const v = localStorage.getItem(BGM_KEY);
+      return v===null ? true : v==='1';
+    }catch(e){ return true; }
+  })(),
+
+  setEnabled(v){
+    this.enabled = !!v;
+    try{ if(typeof localStorage!=='undefined') localStorage.setItem(BGM_KEY, v?'1':'0'); }catch(e){}
+    if(this.enabled){ this.tryStart(); } else { this.pause(); }
+  },
+
+  getEl(){
+    if(!this.el && typeof document!=='undefined'){
+      this.el = document.getElementById('bgm-audio');
+      if(this.el) this.el.volume = 0.38; // BGMは控えめな音量にしておく（SFXやセリフの邪魔をしないため）
+    }
+    return this.el;
+  },
+
+  // ユーザーの最初の操作（スプラッシュのタップ等）の直後に一度だけ呼ぶ。
+  // ブラウザは「ユーザー操作を伴わない自動再生」を制限しているため、それより前には再生できない。
+  tryStart(){
+    if(this.started || !this.enabled) return;
+    const el = this.getEl();
+    if(!el) return;
+    this.started = true;
+    const p = el.play();
+    if(p && typeof p.catch==='function'){
+      p.catch(()=>{ this.started = false; }); // 再生がブロックされた場合は、次の操作で再挑戦できるようにする
+    }
+  },
+
+  pause(){
+    const el = this.getEl();
+    if(el) el.pause();
+  },
+
+  resume(){
+    if(!this.enabled) return;
+    const el = this.getEl();
+    if(!el) return;
+    const p = el.play();
+    if(p && typeof p.catch==='function') p.catch(()=>{});
+  },
+};
+
+/* ---------------------------------------------------------------------
  * 3. ゲーム状態 & コアロジック
  * ------------------------------------------------------------------- */
 const Game = {
@@ -1298,7 +1354,10 @@ const Tutorial = {
       'MASCARADEへようこそ',
       '仮面舞踏会を舞台にした、1対1の心理戦カードゲームです。<br><br>手札は常に1枚。自分の番が来たら山札から1枚引いて2枚になり、そのうち1枚を場に出します。出した仮面の効果が発動し、時には相手を脱落させることもできます。<br><br>最後まで残るか、山札が尽きたときに一番大きい数字の仮面を持っていれば勝利です。<br><br>まずは、10種類の仮面それぞれの効果を順番に見ていきましょう。',
       null, false,
-      [ { label:'仮面の効果を見る', action:()=>{ Tutorial.showCatalogStep(0); } } ]
+      [
+        { label:'仮面の効果を見る', action:()=>{ Tutorial.showCatalogStep(0); } },
+        { label:'キャンセル', action:()=>{ UI.forceBackToStart(); } },
+      ]
     );
   },
 
@@ -1325,6 +1384,7 @@ const Tutorial = {
         <button class="btn primary" id="tut-next">${isLastCard ? '練習対局へ進む' : '次へ'}</button>
       </div>
       ${!isLastCard ? `<div class="choice-row"><button class="btn ghost" id="tut-skip">スキップして練習対局へ</button></div>` : ''}
+      <div class="choice-row"><button class="btn ghost" id="tut-cancel" style="font-size:11px;">やめてタイトルへ戻る</button></div>
     `;
     overlay.classList.add('open');
     if(index>0){
@@ -1334,6 +1394,7 @@ const Tutorial = {
     document.getElementById('tut-next').onclick = ()=>{ Tutorial.showCatalogStep(index+1); };
     const skipBtn = document.getElementById('tut-skip');
     if(skipBtn) skipBtn.onclick = ()=>{ overlay.classList.remove('open'); Tutorial.beginPracticeGame(); };
+    document.getElementById('tut-cancel').onclick = ()=>{ UI.forceBackToStart(); };
   },
 
   beginPracticeGame(){
@@ -1383,6 +1444,7 @@ const UI = {
     this.buildStartDeco();
     this.initSplash();
     this.updateSfxButton();
+    this.updateBgmButton();
   },
 
   toggleSfx(){
@@ -1396,6 +1458,20 @@ const UI = {
     if(!btn) return;
     btn.textContent = SFX.enabled ? '🔊' : '🔇';
     btn.classList.toggle('muted', !SFX.enabled);
+  },
+
+  toggleBgm(){
+    BGM.setEnabled(!BGM.enabled);
+    this.updateBgmButton();
+  },
+
+  updateBgmButton(){
+    const btn = document.getElementById('bgm-toggle');
+    if(!btn) return;
+    // ミュート状態は「アイコンの見た目を変える」のではなく、.muted クラスの減光表現だけで示す。
+    // 特殊なグリフの組み合わせ（結合文字等）は環境によって描画が崩れることがあるため避けている。
+    btn.textContent = '🎵';
+    btn.classList.toggle('muted', !BGM.enabled);
   },
 
   // タイトル画面下部の余白を彩る、装飾用の仮面カード（大公・貴婦人）
@@ -1475,6 +1551,7 @@ const UI = {
   dismissSplash(){
     const el = document.getElementById('splash-screen');
     if(el) el.classList.add('dismissed');
+    BGM.tryStart(); // ブラウザの自動再生制限のため、最初のユーザー操作（このタップ）に合わせて再生を試みる
   },
 
   buildDifficultyPicker(){
@@ -2267,6 +2344,7 @@ const UI = {
 
   // タイトル画面からの開始：いきなり対局が始まらないよう、一度確認を挟む
   confirmStartGame(){
+    BGM.tryStart(); // スプラッシュでの自動再生がブロックされていた場合の保険として、ここでも再試行する
     const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
     UI.showInfoModal(
       '準備はよろしいですか？',
