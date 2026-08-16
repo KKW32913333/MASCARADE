@@ -109,8 +109,8 @@ const DIFFICULTY_ORDER = ['novice','courtier','wily'];
  * 2b-2. 対戦形式定義（CPU戦 / オンライン対戦）
  * ------------------------------------------------------------------- */
 const MODE_DEFS = {
-  cpu:    { id:'cpu',    label:'CPU対戦',     epithet:'仮面卿と、腕試しの一夜を。' },
-  online: { id:'online', label:'オンライン対戦', epithet:'合言葉を交換して、誰かと一夜を。' },
+  cpu:    { id:'cpu',    label:'CPU対戦',     epithet:'仮面卿を相手に、腕試しの一局を。' },
+  online: { id:'online', label:'オンライン対戦', epithet:'合言葉を交換して、対戦相手を見つけよう。' },
 };
 const MODE_ORDER = ['cpu','online'];
 
@@ -2348,7 +2348,7 @@ const UI = {
     const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
     UI.showInfoModal(
       '準備はよろしいですか？',
-      `「${diff.label}」との一夜が始まります。<br>手札は常に1枚。山札から引き、2枚のうち1枚を場に出して駆け引きを進めましょう。`,
+      `「${diff.label}」との対局が始まります。<br>手札は常に1枚。山札から引き、2枚のうち1枚を場に出して駆け引きを進めましょう。`,
       null, false,
       [
         { label:'舞踏会へ', action:()=>{ Game.newGame(); } },
@@ -2368,7 +2368,7 @@ const UI = {
     const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
     UI.showInfoModal(
       'もう一度、舞踏会へ',
-      `同じ相手（「${diff.label}」）と、新たな一夜を過ごしますか？`,
+      `同じ相手（「${diff.label}」）と、もう一度対局しますか？`,
       null, false,
       [
         { label:'はじめる', action:()=>{ Game.newGame(); } },
