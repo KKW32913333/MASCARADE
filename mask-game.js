@@ -1291,6 +1291,16 @@ const Online = {
           if(typeof UI!=='undefined' && UI.showChatBubble) UI.showChatBubble(data.chatText);
         }
       }
+      // 相手側のハートビート（生存確認）を記録しておく
+      if(this.role){
+        const opponentField = this.role==='host' ? 'guestLastSeen' : 'hostLastSeen';
+        if(data[opponentField]) this._opponentLastSeen = data[opponentField];
+      }
+      // 相手が明示的に退出した場合は、タイムアウトを待たずすぐに知らせる
+      if(data.status==='abandoned' && Game.state && Game.state.isOnline && !Game.state.gameOver){
+        if(typeof UI!=='undefined' && UI.showOpponentLeftNotice) UI.showOpponentLeftNotice();
+        return;
+      }
       if(data.status==='playing' && data.hostUid && data.guestUid){
         this._enterGame(data);
       } else if(data.status==='waiting'){
@@ -1309,6 +1319,7 @@ const Online = {
     Game._applyingRemote = true;
     const myIdx = this.role === 'host' ? 0 : 1;
     Game.state = Object.assign({}, deserializeStateFromFirestore(data.state), { isOnline:true, myIdx });
+    if(!this.heartbeatTimer) this.startHeartbeat(); // 二重に開始しないよう、まだ動いていない時だけ始める
     if(Game.state.phase==='idle'){
       // ホスト側：ゲストが参加した瞬間、最初のターンを開始してから同期する
       if(this.role==='host'){
@@ -1367,6 +1378,24 @@ const Online = {
     });
   },
 
+  // 同じ相手・同じ部屋のまま、もう一度対局を始める
+  rematch(){
+    if(!this.roomCode || !this.db) return;
+    CPU.rangeMemory = {}; CPU.bottomMemory = null; CPU.exactMemory = {};
+    const s = Game.state;
+    const hostName = (s && s.players[0] && s.players[0].name) || 'プレイヤー1';
+    const guestName = (s && s.players[1] && s.players[1].name) || 'プレイヤー2';
+    const freshState = Game.buildFreshState([hostName, guestName]);
+    this.db.collection('rooms').doc(this.roomCode).update({
+      state: serializeStateForFirestore(freshState),
+      status: 'playing',
+      updatedAt: Date.now(),
+    }).catch((err)=>{
+      if(typeof UI!=='undefined' && UI.showToast) UI.showToast('再戦の開始に失敗しました', 'danger');
+      console.error('[MASQUERADE] 再戦の開始に失敗:', err);
+    });
+  },
+
   // ランキング上位を取得する（多い順に指定件数）
   fetchLeaderboard(limit){
     if(!this.db) return Promise.resolve([]);
@@ -1398,6 +1427,7 @@ const Online = {
   },
 
   leaveRoom(){
+    this.stopHeartbeat();
     if(this.unsubscribe){ this.unsubscribe(); this.unsubscribe = null; }
     if(this.roomCode && this.db){
       this.db.collection('rooms').doc(this.roomCode).update({ status:'abandoned', updatedAt: Date.now() }).catch(()=>{});
@@ -1406,6 +1436,41 @@ const Online = {
     this.role = null;
     this.panelState = 'idle';
     this.errorMsg = '';
+  },
+
+  // ハートビート：自分がまだこの対局に接続していることを、定期的にFirestoreへ書き込んで伝える。
+  // 相手側はこの更新時刻の間隔から、通信が途切れていないかを判断する。
+  startHeartbeat(){
+    this.stopHeartbeat();
+    const beat = ()=>{
+      if(!this.roomCode || !this.db || !this.role) return;
+      const field = this.role==='host' ? 'hostLastSeen' : 'guestLastSeen';
+      this.db.collection('rooms').doc(this.roomCode).update({ [field]: Date.now() }).catch(()=>{});
+    };
+    beat();
+    this.heartbeatTimer = setInterval(beat, 10000); // 10秒ごとに自分の生存を伝える
+    this.staleTimer = setInterval(()=>this._checkOpponentStale(), 5000); // 5秒ごとに相手の様子を確認する
+  },
+
+  stopHeartbeat(){
+    if(this.heartbeatTimer){ clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
+    if(this.staleTimer){ clearInterval(this.staleTimer); this.staleTimer = null; }
+    this._opponentLastSeen = null;
+    this._staleWarned = false;
+  },
+
+  // 相手の最終確認時刻から一定時間が経っていたら「反応がない」と判断し、案内を表示する
+  _checkOpponentStale(){
+    if(!Game.state || !Game.state.isOnline) return;
+    if(this._opponentLastSeen == null) return; // まだ相手の情報を受け取っていない
+    const elapsed = Date.now() - this._opponentLastSeen;
+    if(elapsed > 25000 && !this._staleWarned){
+      this._staleWarned = true;
+      UI.showOpponentStaleWarning();
+    } else if(elapsed <= 25000 && this._staleWarned){
+      this._staleWarned = false; // 再び反応があれば、警告状態を解除する
+      if(typeof UI!=='undefined' && UI.hideOpponentStaleWarning) UI.hideOpponentStaleWarning();
+    }
   },
 
   resetPanel(){
@@ -2170,6 +2235,8 @@ const UI = {
     const header = document.getElementById('site-header');
     if(header) header.classList.remove('compact');
     if(Game.state && Game.state.isOnline && typeof Online!=='undefined' && Online.leaveRoom) Online.leaveRoom();
+    this.hideOpponentStaleWarning();
+    this._leftNoticeShown = false;
     // チュートリアル中にどの経路で戻ってきても、必ず後片付け（元の難易度設定への復元など）を行う
     if(typeof Tutorial!=='undefined' && Tutorial.active){
       Tutorial.active = false;
@@ -2503,6 +2570,44 @@ const UI = {
     if(typeof SFX!=='undefined') SFX.turn();
   },
 
+  // 対戦相手からの反応が一定時間なくなった時に表示する、控えめな警告バナー
+  // （対局操作自体は妨げず、いつでも消して普通に続けられるようにしている）
+  showOpponentStaleWarning(){
+    const banner = document.getElementById('stale-banner');
+    if(banner) banner.style.display = '';
+  },
+
+  hideOpponentStaleWarning(){
+    const banner = document.getElementById('stale-banner');
+    if(banner) banner.style.display = 'none';
+  },
+
+  confirmLeaveStale(){
+    UI.showInfoModal(
+      '対局を終了しますか？',
+      '対戦相手からの反応がありません。対局を終了してタイトルへ戻りますか？',
+      null, false,
+      [
+        { label:'終了する', action:()=>{ UI.forceBackToStart(); } },
+        { label:'もう少し待つ', action:()=>{} },
+      ]
+    );
+  },
+
+  // 対戦相手が自ら退出したことが分かった場合に表示する（反応なしの推測ではなく確定情報のため、
+  // ワンクッション挟まずすぐに知らせる）
+  showOpponentLeftNotice(){
+    if(this._leftNoticeShown) return;
+    this._leftNoticeShown = true;
+    if(typeof Online!=='undefined') Online.stopHeartbeat();
+    UI.showInfoModal(
+      '対戦相手が退出しました',
+      '対戦相手が舞踏会を去りました。この対局は終了します。',
+      null, false,
+      [ { label:'タイトルへ戻る', action:()=>{ UI._leftNoticeShown = false; UI.forceBackToStart(); } } ]
+    );
+  },
+
   // 定型文の一覧から選んで相手に送る、簡易チャットの選択画面を開く
   showQuickChatPicker(){
     if(!Game.state || !Game.state.isOnline) return;
@@ -2635,7 +2740,7 @@ const UI = {
       ${revealRow}
       ${recordLine}
       <div class="start-actions" style="margin-top:18px;">
-        <button class="btn-grand" onclick="UI.restart()">${s.isOnline ? 'タイトルへ戻る' : 'もう一度舞踏会へ'}</button>
+        <button class="btn-grand" onclick="UI.restart()">もう一度舞踏会へ</button>
       </div>
       <div class="start-actions" style="margin-top:10px;">
         <button class="btn ghost" onclick="UI.shareResult()">結果を共有</button>
@@ -2700,8 +2805,15 @@ const UI = {
     document.getElementById('gameover-overlay').classList.remove('open');
     const s = Game.state;
     if(s && s.isOnline){
-      // オンライン対戦の再戦（同じ相手との連続対局）は現状未対応のため、タイトルへ戻る
-      UI.forceBackToStart();
+      UI.showInfoModal(
+        'もう一度、舞踏会へ',
+        '同じ相手と、もう一度対局しますか？（相手の画面にも自動で反映されます）',
+        null, false,
+        [
+          { label:'はじめる', action:()=>{ Online.rematch(); } },
+          { label:'タイトルへ戻る', action:()=>{ UI.forceBackToStart(); } },
+        ]
+      );
       return;
     }
     const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;

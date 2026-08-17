@@ -371,6 +371,14 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .online-waiting-dot:nth-child(3){ animation-delay:.4s; }
 @keyframes onlinePulse{ 0%,100%{ opacity:.3; } 50%{ opacity:1; } }
 .online-error{ color:var(--danger); font-size:12px; text-align:center; }
+.stale-banner{
+  display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+  background:rgba(193,73,95,0.16); border:1px solid rgba(193,73,95,0.4); border-radius:10px;
+  padding:8px 12px; margin:4px 0 8px; font-size:12px; color:var(--ivory);
+  animation:staleBannerPulse 2.4s ease-in-out infinite;
+}
+@keyframes staleBannerPulse{ 0%,100%{ opacity:.85; } 50%{ opacity:1; } }
+@media (prefers-reduced-motion: reduce){ .stale-banner{ animation:none; } }
 .online-name-row{
   display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px;
   font-size:12px; color:var(--ivory-dim);
@@ -827,6 +835,10 @@ body.table-mode footer.credits{ display:none; }
 
   <!-- ============ TABLE ============ -->
   <div id="table">
+    <div class="stale-banner" id="stale-banner" style="display:none;">
+      <span>⚠ 対戦相手との接続が途切れているようです</span>
+      <button class="btn ghost" style="font-size:11px; padding:5px 10px;" onclick="UI.confirmLeaveStale()">対局を終了する</button>
+    </div>
     <div class="status-strip">
       <button class="icon-btn" onclick="UI.backToStart()" title="タイトルへ戻る" aria-label="タイトルへ戻る">← タイトル</button>
       <div class="turn-badge" id="turn-badge">―</div>
