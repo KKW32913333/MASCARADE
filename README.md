@@ -39,6 +39,30 @@
 - GitHub Pages（またはそれに類する静的ホスティング）でHTTPS配信されていることが前提です。`file://` で直接開いている場合はService Worker自体が動作しないため、この自動更新の仕組みは働きません。
 - ファイルを更新するたびに `sw.js` 内の `CACHE_NAME`（現在 `mascarade-cache-v2`）は必ず1つ上げる運用にしてください（同じ名前のままだと、静的資産側のキャッシュが更新されないことがあります）。
 
+## 今回の更新内容（v43）― 「参加する」を押すと必ずタイムアウトする不具合を修正（重要：ルールの再設定が必要です）
+
+### 原因（コードの不具合ではなく、Firestoreのセキュリティルールの論理的な矛盾でした）
+
+これまでお伝えしていたセキュリティルールの `rooms` に対する更新許可条件は、次のようになっていました。
+
+```
+allow update: if request.auth != null &&
+  (resource.data.hostUid == request.auth.uid || resource.data.guestUid == request.auth.uid);
+```
+
+これは「更新前の時点で、自分のuidが既に`hostUid`か`guestUid`に入っている場合だけ更新を許可する」という条件です。ところが、**参加者が「参加する」を押した瞬間はまさに「自分のuidを`guestUid`に初めて書き込もうとしている」タイミング**であり、更新前の時点ではまだどちらのフィールドにも自分のuidが入っていません。そのため、この条件は参加者による最初の書き込みを常に拒否してしまい、応答が正しく返らないまま、タイムアウト処理が発火していたと考えられます。
+
+### 対応（Firebaseコンソールでの再設定が必要です）
+
+`allow update` の条件に、「まだ誰も参加していない部屋に対して、自分のuidを`guestUid`として書き込もうとしている場合」を許可する条件を追加しました。**お手数ですが、README内「オンライン対戦の設定方法」に記載の最新のセキュリティルールを、Firebaseコンソールに貼り付け直して公開してください。**
+
+### あわせて行ったこと
+
+- 「接続テスト」機能に、実際の「部屋を作る→参加する」の流れをそのまま模したテスト項目を追加しました。今回のような、特定の操作でだけ起きる問題も、次回からはこのテストで検知できるようになります。
+- 参加に失敗した際のエラーメッセージを、原因（セキュリティルールの設定）を具体的に案内する内容に改善しました。
+
+**私の側で確認できていないこと**：この環境からは実際のFirebase接続を試せないため、今回の修正で実際に参加できるようになるかまでは確認できていません。ルールを貼り付け直した上で、もう一度お試しください。
+
 ## 今回の更新内容（v42）― スマホ版「場」の見切れを修正（演出が見えなかった原因もこれでした）
 
 ### 原因
@@ -332,7 +356,7 @@ README に「### 「データベースが作成できているか」ご自身で
      appId: "...",
    };
    ```
-6. Firestore の「ルール」タブを開き、以下のセキュリティルールを貼り付けて公開する（**ランキング機能を追加したため、以前お伝えした内容から更新されています。再度貼り付け直してください**）：
+6. Firestore の「ルール」タブを開き、以下のセキュリティルールを貼り付けて公開する（**参加者が「参加する」を押すと必ずタイムアウトしてしまう不具合の修正のため、`rooms`の`allow update`条件が以前の内容から更新されています。再度貼り付け直してください**）：
    ```
    rules_version = '2';
    service cloud.firestore {
@@ -340,8 +364,12 @@ README に「### 「データベースが作成できているか」ご自身で
        match /rooms/{roomId} {
          allow read: if request.auth != null;
          allow create: if request.auth != null;
-         allow update: if request.auth != null &&
-           (resource.data.hostUid == request.auth.uid || resource.data.guestUid == request.auth.uid);
+         allow update: if request.auth != null && (
+           resource.data.hostUid == request.auth.uid ||
+           resource.data.guestUid == request.auth.uid ||
+           (resource.data.status == 'waiting' && resource.data.guestUid == null
+             && request.resource.data.guestUid == request.auth.uid)
+         );
        }
        match /leaderboard/{uid} {
          allow read: if request.auth != null;
@@ -353,7 +381,7 @@ README に「### 「データベースが作成できているか」ご自身で
      }
    }
    ```
-   - `rooms`：対局の部屋（これまで通り）
+   - `rooms`：対局の部屋（これまで通り）。**3つ目の条件が今回追加した部分**で、「まだ誰も参加していない（`status`が`waiting`で`guestUid`が`null`の）部屋に対して、自分のuidをguestUidとして書き込もうとしている場合」だけ、参加者による最初の書き込みを許可します。これにより、参加者がまだ部屋の一員として登録されていない「参加する瞬間」にも、正しく書き込みが行えるようになります。
    - `leaderboard`：ランキング。全員が読めますが、自分の記録（自分のuidの文書）にしか書き込めません
    - `_diagnostics`：後述の「接続テスト」機能が一時的にデータを書き込んで読み書きを確認するための、テスト専用の置き場です
 

@@ -1312,7 +1312,12 @@ const Online = {
       settled = true;
       clearTimeout(timeoutId);
       this.panelState = 'error';
-      this.errorMsg = `参加に失敗しました（${err.code || err.message}）。`;
+      const code2 = err && err.code ? err.code : '';
+      if(code2 === 'permission-denied'){
+        this.errorMsg = `参加に失敗しました（${code2}）。Firestoreのセキュリティルールが、部屋への参加（guestUidの書き込み）を許可する内容になっているかご確認ください（README.mdの最新のルールをご参照ください）。`;
+      } else {
+        this.errorMsg = `参加に失敗しました（${code2 || (err && err.message) || '不明なエラー'}）。`;
+      }
       UI.renderOnlinePanel();
     });
   },
@@ -1619,9 +1624,39 @@ const Online = {
         .then(()=>{
           log.push('　→ ✓ 削除成功');
           log.push('');
-          log.push('✅ すべての診断に成功しました。Firebaseとの接続は正常です。');
-          log.push('（それでも部屋の作成がうまくいかない場合は、セキュリティルールの rooms コレクション向けの設定をご確認ください）');
-          render(false);
+          log.push('⑦ 「部屋への参加」を模擬テスト中…');
+          render(true);
+          const roomTestId = 'diagroom_' + Date.now();
+          const roomRef = this.db.collection('rooms').doc(roomTestId);
+          const joinTimeout = setTimeout(()=>{
+            log.push('　→ ✕ タイムアウト（10秒応答なし）。');
+            render(false);
+          }, 10000);
+          // 「誰か他の人」が部屋を作った状況を模して、自分とは異なる仮のhostUidで部屋を作成する
+          return roomRef.set({
+            hostUid: 'diag-fake-host-uid', guestUid: null, status: 'waiting',
+            state: {}, createdAt: Date.now(), updatedAt: Date.now(),
+          }).then(()=>{
+            // 参加者として、自分のuidをguestUidに書き込めるか（＝実際の「参加する」ボタンと同じ操作）を試す
+            return roomRef.update({ guestUid: this.uid, status: 'playing', updatedAt: Date.now() });
+          }).then(()=>{
+            clearTimeout(joinTimeout);
+            log.push('　→ ✓ 参加（guestUidの書き込み）に成功');
+            return roomRef.delete();
+          }).then(()=>{
+            log.push('　→ ✓ 後片付け完了');
+            log.push('');
+            log.push('✅ すべての診断に成功しました。Firebaseとの接続、および部屋への参加も正常に動作します。');
+            render(false);
+          }).catch((err)=>{
+            clearTimeout(joinTimeout);
+            log.push(`　→ ✕ 参加テストに失敗：${err.code || err.message}`);
+            if(err.code==='permission-denied'){
+              log.push('　　（rooms のセキュリティルールに、参加者による最初の書き込みを許可する条件が含まれていない可能性があります。README.md の最新のルールを貼り付け直してください）');
+            }
+            roomRef.delete().catch(()=>{});
+            render(false);
+          });
         })
         .catch((err)=>{
           clearTimeout(writeTimeout);
