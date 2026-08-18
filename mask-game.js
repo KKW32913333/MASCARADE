@@ -66,6 +66,20 @@ const QUICK_CHAT_PHRASES = [
   'そろそろ決着をつけましょう',
 ];
 
+// カード効果ごとの演出（effect-stage）の設定：アイコン・呼び名・色を1枚ずつ変えている
+const EFFECT_STAGE_DEFS = {
+  guessRank:     { icon:'🔍', label:'看破',   color:'#d4af37' },
+  peekRange:     { icon:'📡', label:'探知',   color:'#5686c9' },
+  revealHand:    { icon:'🎭', label:'暴露',   color:'#8b3a6b' },
+  protectSelf:   { icon:'🛡️', label:'加護',   color:'#f0d789' },
+  peekDeckTop:   { icon:'🕵️', label:'隠密',   color:'#5686c9' },
+  doubleRedraw:  { icon:'🃏', label:'悪戯',   color:'#c1495f' },
+  secretRedraw:  { icon:'🍷', label:'毒杯',   color:'#8b3a6b' },
+  compareHand:   { icon:'⚔️', label:'決闘',   color:'#c1495f' },
+  sealTurn:      { icon:'🔒', label:'封印',   color:'#d4af37' },
+  mutualDestroy: { icon:'💥', label:'共倒れ', color:'#c1495f' },
+};
+
 /* ---------------------------------------------------------------------
  * 2. ユーティリティ
  * ------------------------------------------------------------------- */
@@ -391,6 +405,7 @@ const Game = {
     p.protectedFlag = false; // 加護は自分の番が来た時点で解除
     const drawn = s.decks[s.turnIndex].pop();
     p.hand.push(drawn);
+    s.lastDrawnCardId = drawn; // 手札枠側で「引いたばかりの1枚」に特別な演出を付けるための目印（同期対象外）
     this.addLog(`── ${p.name} の番（${s.turnCount}巡）──`, true);
     this.addLog(`${p.name} は山札から仮面を1枚引いた。`);
     if(typeof UI!=='undefined' && UI.showTurnBanner){ UI.showTurnBanner(`${p.name}の番`); }
@@ -431,6 +446,7 @@ const Game = {
         // 自らの意思で場に出した場合：自分は脱落するが、道連れに対象も退場させる（貴婦人の加護があれば対象は免れる）
         const otherIdx = this.other(playerIdx);
         const opp = s.players[otherIdx];
+        this.playStage('mutualDestroy', playerIdx, otherIdx);
         this.eliminate(playerIdx, `「${def.name}」を自ら場に出し、正体を明かした`);
         if(opp.alive && opp.protectedFlag){
           this.addLog(`${opp.name}は貴婦人の加護により、道連れを免れた。`);
@@ -480,6 +496,7 @@ const Game = {
       this.finishResolve();
       return;
     }
+    this.playStage('guessRank', actorIdx, t);
     const targetCard = target.hand[0];
     const hit = cardDef(targetCard).number === guessNumber;
     this.addLog(`${actor.name}は「${target.name}の手札は${guessNumber}」と宣言した…${hit?'的中！':'外れ。'}`);
@@ -509,6 +526,7 @@ const Game = {
     const tCard = target.hand[0];
     const num = cardDef(tCard).number;
     const isHigh = num >= 6;
+    this.playStage('peekRange', actorIdx, t);
     this.addLog(`${actor.name}は楽団の調べで${target.name}の仮面を推し量った。（数字は${isHigh?'6以上':'5以下'}）`);
     if(!actor.isCPU){
       UI.showInfoModal('楽団員の調べ', `${target.name}の仮面の数字は…<br><br><b style="font-size:20px; color:var(--gold-light);">${isHigh?'6以上':'5以下'}</b>`, ()=>{
@@ -533,6 +551,7 @@ const Game = {
     }
     const tCard = target.hand[0];
     const d = cardDef(tCard);
+    this.playStage('revealHand', actorIdx, t);
     this.addLog(`${actor.name}は仮面師の力で${target.name}の仮面を見抜き、その場に公開させた。正体は「${d.name}（${d.number}）」。`);
     CPU.exactMemory = CPU.exactMemory || {};
     CPU.exactMemory[t] = tCard; // 公開情報なのでCPUも正確に記憶する
@@ -551,6 +570,7 @@ const Game = {
   effProtectSelf(actorIdx){
     const actor = this.playerAt(actorIdx);
     actor.protectedFlag = true;
+    this.playStage('protectSelf', actorIdx, actorIdx);
     this.addLog(`${actor.name}は「貴婦人」の加護を得た。次の自分の番までは狙われない。`);
     this.finishResolve();
   },
@@ -566,6 +586,7 @@ const Game = {
       return;
     }
     const top = myDeck[myDeck.length-1];
+    this.playStage('peekDeckTop', actorIdx, actorIdx);
     this.addLog(`${actor.name}は自分の山札の一番上をこっそり確認した。`);
     if(!actor.isCPU){
       UI.showInfoModal('密偵の報告', `あなたの山札の一番上は…<br><br>${UI.cardInline(top)}<br><br>このまま戻すか、山札の底へ送るか選んでください。`,
@@ -621,6 +642,7 @@ const Game = {
     const targetOld = drawOne(target, t);
     const actorOld = drawOne(actor, actorIdx);
     if(CPU.exactMemory){ delete CPU.exactMemory[actorIdx]; delete CPU.exactMemory[t]; }
+    this.playStage('doubleRedraw', actorIdx, t);
     this.addLog(`${actor.name}は道化師の悪戯で、${target.name}と自分、双方の仮面を総入れ替えした。（${target.name}が手放したのは${cardDef(targetOld).name}、${actor.name}が手放したのは${cardDef(actorOld).name}）`);
     if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`🃏 ${actor.name}と${target.name}、双方の仮面が入れ替わった`, 'info'); }
     this.finishResolve();
@@ -648,6 +670,7 @@ const Game = {
     // MASQUERADEの黄金律：他者の効果で処分された場合、その仮面自体の効果は発動しない。しかも今回は誰にも公開されない。
     const oldCard = target.hand.pop(); // あえて discard には加えない＝正体を明かさず密かに処分
     if(CPU.exactMemory){ delete CPU.exactMemory[t]; }
+    this.playStage('secretRedraw', actorIdx, t);
     this.addLog(`${actor.name}は${target.name}の仮面を、誰にも見せぬまま密かに毒杯へ沈めた。`);
     let newCard = null;
     if(s.decks[t].length>0){ newCard = s.decks[t].pop(); }
@@ -670,6 +693,7 @@ const Game = {
     }
     const aCard = actor.hand[0], tCard = target.hand[0];
     const aDef = cardDef(aCard), tDef = cardDef(tCard);
+    this.playStage('compareHand', actorIdx, t);
     this.addLog(`${actor.name}と${target.name}は仮面の数字を見せ合った。（${actor.name}:${aDef.name} / ${target.name}:${tDef.name}）`);
 
     // MASQUERADEの黄金律：比べ合いによる公開だけでは脱落しない。数字の大小のみで決着する
@@ -707,6 +731,7 @@ const Game = {
       return;
     }
     target.skipNextTurn = true;
+    this.playStage('sealTurn', actorIdx, t);
     this.addLog(`${actor.name}は大公の権威で、${target.name}の次の番を封じた。`);
     if(typeof UI!=='undefined' && UI.showToast){ UI.showToast(`👑 ${target.name}の次の番が封じられた`, 'info'); }
     if(!actor.isCPU){
@@ -745,6 +770,20 @@ const Game = {
         UI.showToast('🛡 貴婦人の加護が、あなたを守った！', 'info');
       }
     }
+  },
+
+  // この端末の視点（myIdx）から見て、行動側・対象側のどちらかに自分が含まれているかどうか。
+  // 演出（effect-stage）は「自分に関係のある場面」でだけ再生する。
+  isRelevantToMe(actorIdx, targetIdx){
+    const s = this.state;
+    if(!s || typeof s.myIdx!=='number') return true;
+    return actorIdx===s.myIdx || targetIdx===s.myIdx;
+  },
+
+  // カード効果の演出（あれば）を再生する共通の入り口
+  playStage(key, actorIdx, targetIdx){
+    if(typeof UI==='undefined' || !UI.playEffectStage) return;
+    if(targetIdx===undefined || this.isRelevantToMe(actorIdx, targetIdx)) UI.playEffectStage(key);
   },
 
   eliminate(playerIdx, reason){
@@ -2286,9 +2325,12 @@ const UI = {
     document.getElementById('me-eliminated').classList.toggle('show', !bottomPlayer.alive);
     const meCanChoose = !s.gameOver && s.phase==='choose' && !bottomPlayer.isCPU && bottomIdx===s.turnIndex;
     if(!meCanChoose) this.selectedCardId = null; // 自分の選択フェーズ以外では選択状態を破棄
+    // 選択待ちのこの瞬間だけ、引いたばかりの1枚に特別な登場演出を付ける
+    const justDrawnId = (meCanChoose && s.lastDrawnCardId) ? s.lastDrawnCardId : null;
     document.getElementById('me-hand').innerHTML = bottomPlayer.hand.map((cid,i)=>this.renderCard(cid,{
       selectable: meCanChoose,
       chosen: cid===this.selectedCardId,
+      justDrawn: cid===justDrawnId,
       onclick: `UI.onMeSelectCard('${cid}')`,
     })).join('');
     const meZoneLabel = document.getElementById('me-zone-label');
@@ -2315,6 +2357,7 @@ const UI = {
     const cls = ['card'];
     if(opts.selectable) cls.push('selectable');
     if(opts.chosen) cls.push('chosen');
+    if(opts.justDrawn) cls.push('card-drawn');
     return `<div class="${cls.join(' ')}" data-cid="${cid}" ${opts.selectable?`onclick="${opts.onclick}"`:''} title="${d.name}（${d.number}）">
       <img src="${d.image}" alt="${d.name}（${d.number}）">
     </div>`;
@@ -2479,6 +2522,15 @@ const UI = {
     const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
     if(s.players[s.turnIndex].isCPU || s.turnIndex!==myIdx) return;
     this.selectedCardId = (this.selectedCardId===cid) ? null : cid;
+    // クリックした瞬間に、押し込むような手応えのある小さな弾みを一度だけ加える
+    if(!this.reducedMotion()){
+      const el = document.querySelector(`#me-hand .card[data-cid="${cid}"]`);
+      if(el){
+        el.classList.remove('select-pulse');
+        void el.offsetWidth; // reflowでアニメーションを再トリガーする
+        el.classList.add('select-pulse');
+      }
+    }
     this.render();
   },
 
@@ -2531,6 +2583,7 @@ const UI = {
     raf(()=>{
       const dx = (trect.left + Math.min(trect.width,40)/2) - (rect.left + rect.width/2);
       const dy = (trect.top + trect.height/2) - (rect.top + rect.height/2);
+      clone.classList.add('flying'); // 飛んでいる間だけ、金色の光の尾を引かせる
       clone.style.transform = `translate(${dx}px, ${dy}px) rotate(340deg) scale(0.45)`;
       clone.style.opacity = '0.2';
     });
@@ -2560,6 +2613,49 @@ const UI = {
       el.style.transform = 'translate(-50%,0)';
     }
     setTimeout(()=>el.remove(), duration);
+  },
+
+  // カード効果ごとの短い演出（effect-stage）を再生する。結果を伝えるモーダルの表示タイミングは
+  // 一切変えず（＝文字表示はこれまで通り）、この演出はあくまで「前振り」として並行して流れる。
+  // 操作を妨げないよう pointer-events:none を貫通させているため、いつでもボタン操作は可能。
+  playEffectStage(key){
+    const def = EFFECT_STAGE_DEFS[key];
+    const stage = document.getElementById('effect-stage');
+    if(!def || !stage) return;
+    if(this.reducedMotion()) return; // 演出を減らす設定の場合は、結果モーダルの表示だけで十分伝わるようにする
+
+    // 前の演出がまだ終わっていない場合に備えて一旦リセットする
+    stage.className = 'effect-stage';
+    stage.style.setProperty('--stage-color', def.color);
+    const iconEl = document.getElementById('effect-stage-icon');
+    const labelEl = document.getElementById('effect-stage-label');
+    if(iconEl) iconEl.textContent = def.icon;
+    if(labelEl) labelEl.textContent = def.label;
+
+    // 光の粒を放射状にランダム散布する
+    const particlesEl = document.getElementById('effect-stage-particles');
+    if(particlesEl){
+      let html = '';
+      const n = 10;
+      for(let i=0;i<n;i++){
+        const angle = (Math.PI*2*i/n) + (Math.random()*0.5 - 0.25);
+        const dist = 70 + Math.random()*60;
+        const px = Math.cos(angle)*dist;
+        const py = Math.sin(angle)*dist;
+        const delay = (Math.random()*0.15).toFixed(2);
+        html += `<span class="effect-stage-particle" style="left:50%; top:42%; --px:${px.toFixed(0)}px; --py:${py.toFixed(0)}px; animation-delay:${delay}s;"></span>`;
+      }
+      particlesEl.innerHTML = html;
+    }
+
+    // 1フレーム待ってからクラスを付け直すことで、アニメーションが確実に最初から再生されるようにする
+    const raf = (typeof window!=='undefined' && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (fn)=>setTimeout(fn,16);
+    raf(()=>{ raf(()=>{ stage.classList.add('open', `fx-${key}`); }); });
+
+    clearTimeout(this._stageTimer);
+    this._stageTimer = setTimeout(()=>{
+      stage.classList.remove('open', `fx-${key}`);
+    }, 950);
   },
 
   // 対戦相手から届いた簡易メッセージを吹き出し風に表示する
@@ -2851,5 +2947,5 @@ if('serviceWorker' in navigator){
 
 /* テスト用フック（jsdomヘッドレステストから利用。通常のプレイには使用しない） */
 if(typeof window!=='undefined'){
-  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS, Online, Tutorial, QUICK_CHAT_PHRASES };
+  window.__masqueTestHooks = { Game, CPU, UI, CARD_DEFS, DIFFICULTY_DEFS, SFX, MODE_DEFS, Online, Tutorial, QUICK_CHAT_PHRASES, EFFECT_STAGE_DEFS };
 }

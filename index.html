@@ -371,6 +371,154 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 .online-waiting-dot:nth-child(3){ animation-delay:.4s; }
 @keyframes onlinePulse{ 0%,100%{ opacity:.3; } 50%{ opacity:1; } }
 .online-error{ color:var(--danger); font-size:12px; text-align:center; }
+
+/* =======================================================================
+   カード効果ごとの演出オーバーレイ（effect-stage）
+   ・画面全体に一瞬だけ現れる、カードの種類ごとに異なる合図・演出。
+   ・クリック等の操作を一切妨げないよう pointer-events:none を貫通させている。
+   ・結果を伝えるモーダル（文字表示）はこれまで通りそのまま表示される。演出はその「前振り」。
+   ======================================================================= */
+.effect-stage{
+  position:fixed; inset:0; z-index:60; pointer-events:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  opacity:0; visibility:hidden; transition:opacity .25s ease;
+}
+.effect-stage.open{ opacity:1; visibility:visible; }
+.effect-stage-ring{
+  position:absolute; width:60px; height:60px; border-radius:50%;
+  border:2px solid var(--stage-color, var(--gold));
+  box-shadow:0 0 0 0 var(--stage-color, var(--gold));
+  opacity:0;
+}
+.effect-stage.open .effect-stage-ring{ animation:stageRingBurst .8s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes stageRingBurst{
+  0%{ opacity:.9; transform:scale(.3); }
+  70%{ opacity:.35; }
+  100%{ opacity:0; transform:scale(9); }
+}
+.effect-stage-particles{ position:absolute; inset:0; overflow:hidden; }
+.effect-stage-particle{
+  position:absolute; width:4px; height:4px; border-radius:50%;
+  background:var(--stage-color, var(--gold)); box-shadow:0 0 6px var(--stage-color, var(--gold));
+  opacity:0;
+}
+.effect-stage.open .effect-stage-particle{ animation:stageParticleFly .75s ease-out both; }
+@keyframes stageParticleFly{
+  0%{ opacity:1; transform:translate(0,0) scale(1); }
+  100%{ opacity:0; transform:translate(var(--px,60px),var(--py,-60px)) scale(.3); }
+}
+.effect-stage-icon{
+  position:relative; font-size:64px; line-height:1; filter:drop-shadow(0 0 18px var(--stage-color, var(--gold)));
+  opacity:0; transform:scale(.4);
+}
+.effect-stage.open .effect-stage-icon{ animation:stageIconPop .8s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes stageIconPop{
+  0%{ opacity:0; transform:scale(.3) rotate(-12deg); }
+  55%{ opacity:1; transform:scale(1.15) rotate(4deg); }
+  100%{ opacity:0; transform:scale(1) rotate(0deg); }
+}
+.effect-stage-label{
+  position:relative; font-family:'Shippori Mincho',serif; font-size:20px; letter-spacing:.3em;
+  color:var(--stage-color, var(--gold-light)); text-shadow:0 0 16px var(--stage-color, var(--gold));
+  opacity:0; transform:translateY(8px);
+}
+.effect-stage.open .effect-stage-label{ animation:stageLabelRise .8s cubic-bezier(.2,1,.4,1) .05s both; }
+@keyframes stageLabelRise{
+  0%{ opacity:0; transform:translateY(14px); }
+  40%{ opacity:1; transform:translateY(0); }
+  80%{ opacity:1; }
+  100%{ opacity:0; transform:translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce){
+  .effect-stage{ transition:none; }
+  .effect-stage .effect-stage-ring, .effect-stage .effect-stage-particle,
+  .effect-stage .effect-stage-icon, .effect-stage .effect-stage-label{ animation:none !important; opacity:0 !important; }
+}
+
+/* ---- カードごとの個性を出すための追加モーション（アイコンに重ねて適用） ---- */
+/* 給仕「看破」：スキャンするような左右の走査線 */
+.effect-stage.fx-guessRank .effect-stage-icon{ animation-name:stageIconPop, fxScan; animation-duration:.8s,.8s; }
+@keyframes fxScan{ 0%,100%{ filter:drop-shadow(0 0 18px var(--stage-color)) brightness(1);} 50%{ filter:drop-shadow(0 0 30px var(--stage-color)) brightness(1.6);} }
+
+/* 楽団員「探知」：波紋が連続で広がるレーダー */
+.effect-stage.fx-peekRange .effect-stage-ring{ animation-name:stageRingBurst, fxRadarPulse; }
+@keyframes fxRadarPulse{ 0%,100%{ border-width:2px; } 50%{ border-width:4px; } }
+
+/* 仮面師「暴露」：仮面が左右に割れて剥がれる */
+.effect-stage.fx-revealHand .effect-stage-icon{ animation:fxCrack .8s cubic-bezier(.3,.9,.3,1) both; }
+@keyframes fxCrack{
+  0%{ opacity:0; transform:scale(.5) rotate(0deg); }
+  40%{ opacity:1; transform:scale(1.2) rotate(0deg); }
+  60%{ transform:scale(1.1) rotate(-6deg); }
+  75%{ transform:scale(1.15) rotate(6deg); }
+  100%{ opacity:0; transform:scale(1.3) rotate(0deg); }
+}
+
+/* 貴婦人「加護」：金の盾がふわりと開く */
+.effect-stage.fx-protectSelf .effect-stage-icon{ animation:fxShieldBloom .9s cubic-bezier(.2,1.3,.3,1) both; }
+@keyframes fxShieldBloom{
+  0%{ opacity:0; transform:scale(.2); }
+  50%{ opacity:1; transform:scale(1.25); }
+  100%{ opacity:0; transform:scale(1.05); }
+}
+.effect-stage.fx-protectSelf .effect-stage-ring{ animation-name:stageRingBurst, fxShieldRing; }
+@keyframes fxShieldRing{ 0%{ border-style:double; border-width:6px; } 100%{ border-style:solid; } }
+
+/* 密偵「隠密」：静かに、影のようにすっと現れて消える */
+.effect-stage.fx-peekDeckTop .effect-stage-icon{ animation:fxShadowPeek 1s ease both; }
+@keyframes fxShadowPeek{
+  0%{ opacity:0; transform:translateX(-14px) scale(.7); }
+  30%{ opacity:.9; transform:translateX(0) scale(1); }
+  70%{ opacity:.9; }
+  100%{ opacity:0; transform:translateX(14px) scale(.85); }
+}
+
+/* 道化師「悪戯」：2枚が入れ替わるようにくるりと回転 */
+.effect-stage.fx-doubleRedraw .effect-stage-icon{ animation:fxJesterSwap .9s cubic-bezier(.3,.9,.3,1.1) both; }
+@keyframes fxJesterSwap{
+  0%{ opacity:0; transform:scale(.5) rotate(0deg); }
+  30%{ opacity:1; }
+  100%{ opacity:0; transform:scale(1) rotate(340deg); }
+}
+
+/* 毒見役「毒杯」：とろりと沈んでいくような、ゆっくりした落下＋滲み */
+.effect-stage.fx-secretRedraw .effect-stage-icon{ animation:fxPoisonSink 1s ease-in both; }
+@keyframes fxPoisonSink{
+  0%{ opacity:0; transform:translateY(-10px) scale(.6); }
+  35%{ opacity:1; transform:translateY(0) scale(1.1); }
+  100%{ opacity:0; transform:translateY(16px) scale(.9); filter:blur(2px) drop-shadow(0 0 18px var(--stage-color)); }
+}
+
+/* 黒騎士「決闘」：ぶつかり合うような激しい振動と閃光 */
+.effect-stage.fx-compareHand .effect-stage-icon{ animation:fxClash .7s cubic-bezier(.2,1,.4,1) both; }
+@keyframes fxClash{
+  0%{ opacity:0; transform:scale(.6); }
+  35%{ opacity:1; transform:scale(1.3); }
+  45%{ transform:scale(1.1) translateX(-8px); }
+  55%{ transform:scale(1.1) translateX(8px); }
+  65%{ transform:scale(1.1) translateX(-4px); }
+  100%{ opacity:0; transform:scale(1) translateX(0); }
+}
+
+/* 大公「封印」：スタンプを押すように、上からドンと降りてくる */
+.effect-stage.fx-sealTurn .effect-stage-icon{ animation:fxSealStamp .7s cubic-bezier(.5,0,.3,1.3) both; }
+@keyframes fxSealStamp{
+  0%{ opacity:0; transform:translateY(-70px) scale(1.4) rotate(-8deg); }
+  55%{ opacity:1; transform:translateY(0) scale(1) rotate(0deg); }
+  100%{ opacity:0; transform:translateY(0) scale(.96) rotate(0deg); }
+}
+
+/* 仮面の主催者「共倒れ」：中心から弾けるように大きく広がる、最も派手な演出 */
+.effect-stage.fx-mutualDestroy .effect-stage-icon{ animation:fxShatter 1.1s cubic-bezier(.2,1,.3,1) both; font-size:80px; }
+@keyframes fxShatter{
+  0%{ opacity:0; transform:scale(.2) rotate(0deg); }
+  35%{ opacity:1; transform:scale(1.5) rotate(8deg); }
+  50%{ transform:scale(1.3) rotate(-6deg); }
+  100%{ opacity:0; transform:scale(2.1) rotate(0deg); }
+}
+.effect-stage.fx-mutualDestroy .effect-stage-ring{ animation-name:stageRingBurst, fxShatterRing; animation-duration:1.1s,1.1s; }
+@keyframes fxShatterRing{ 0%{ border-width:5px; } 100%{ border-width:1px; } }
+
 .stale-banner{
   display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
   background:rgba(193,73,95,0.16); border:1px solid rgba(193,73,95,0.4); border-radius:10px;
@@ -537,11 +685,31 @@ header.top.compact h1{ font-size:20px; margin:0; opacity:1; animation:none; }
 
 .flying-card{
   position:fixed; z-index:999; pointer-events:none; border-radius:10px; overflow:hidden;
-  box-shadow:0 10px 30px rgba(0,0,0,0.6);
-  transition:transform .5s cubic-bezier(.28,.85,.35,1), opacity .5s ease .05s;
+  box-shadow:0 10px 30px rgba(0,0,0,0.6), 0 0 0 rgba(212,175,55,0);
+  transition:transform .52s cubic-bezier(.22,.85,.3,1), opacity .52s ease .08s, box-shadow .52s ease;
 }
+.flying-card.flying{ box-shadow:0 10px 40px rgba(0,0,0,0.7), 0 0 34px rgba(212,175,55,0.55); }
 .flying-card img{ width:100%; height:100%; object-fit:cover; display:block; }
 @media (prefers-reduced-motion: reduce){ .flying-card{ transition:opacity .2s ease; } }
+
+/* カードを選ぶ瞬間の「押し込み」感（クリック直後にごく短く縮んでから戻る） */
+.card.select-pulse{ animation:cardSelectPulse .32s cubic-bezier(.3,1.6,.4,1) both; }
+@keyframes cardSelectPulse{
+  0%{ transform:scale(1); }
+  35%{ transform:scale(.92); }
+  100%{ transform:scale(1); }
+}
+
+/* 山札から新しく引いたばかりの1枚に付ける、少し大きめの登場演出 */
+.card.card-drawn{ animation:cardDrawIn .55s cubic-bezier(.2,.9,.25,1.15) both; }
+@keyframes cardDrawIn{
+  0%{ opacity:0; transform:translateY(-26px) rotate(-10deg) scale(.75); filter:brightness(1.5) drop-shadow(0 0 0 rgba(212,175,55,0)); }
+  60%{ opacity:1; transform:translateY(4px) rotate(3deg) scale(1.04); filter:brightness(1.25) drop-shadow(0 0 16px rgba(212,175,55,0.6)); }
+  100%{ opacity:1; transform:translateY(0) rotate(0deg) scale(1); filter:brightness(1) drop-shadow(0 0 0 rgba(212,175,55,0)); }
+}
+@media (prefers-reduced-motion: reduce){
+  .card.select-pulse, .card.card-drawn{ animation:none; }
+}
 
 /* ---------- action panel ---------- */
 #action-panel{
@@ -890,6 +1058,14 @@ body.table-mode footer.credits{ display:none; }
   <div id="log-panel"><button class="lg-close" onclick="UI.toggleLog()" aria-label="閉じる"></button></div>
 
   <footer class="credits">MASQUERADE — an original masquerade deduction card game</footer>
+</div>
+
+<!-- 各カード効果ごとの演出オーバーレイ（結果モーダルより下のレイヤーで一瞬光る） -->
+<div class="effect-stage" id="effect-stage" aria-hidden="true">
+  <div class="effect-stage-ring" aria-hidden="true"></div>
+  <div class="effect-stage-particles" id="effect-stage-particles" aria-hidden="true"></div>
+  <div class="effect-stage-icon" id="effect-stage-icon"></div>
+  <div class="effect-stage-label" id="effect-stage-label"></div>
 </div>
 
 <!-- peek / info modal -->
