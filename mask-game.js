@@ -1340,12 +1340,16 @@ const Online = {
         const opponentField = this.role==='host' ? 'guestLastSeen' : 'hostLastSeen';
         if(data[opponentField]) this._opponentLastSeen = data[opponentField];
       }
-      // 相手が明示的に退出した場合は、タイムアウトを待たずすぐに知らせる
+      // 相手が明示的に退出した場合は、タイムアウトを待たずすぐに知らせ、対局を終了状態にする
       if(data.status==='abandoned' && Game.state && Game.state.isOnline && !Game.state.gameOver){
+        Game.state.gameOver = true;
+        Game.state.phase = 'over';
+        Game.state.endReason = 'opponent_left';
+        UI.render();
         if(typeof UI!=='undefined' && UI.showOpponentLeftNotice) UI.showOpponentLeftNotice();
         return;
       }
-      if(data.status==='playing' && data.hostUid && data.guestUid){
+      if((data.status==='playing' || data.status==='over') && data.hostUid && data.guestUid){
         this._enterGame(data);
       } else if(data.status==='waiting'){
         this.panelState = 'waiting';
@@ -1364,14 +1368,32 @@ const Online = {
     const myIdx = this.role === 'host' ? 0 : 1;
     Game.state = Object.assign({}, deserializeStateFromFirestore(data.state), { isOnline:true, myIdx });
     if(!this.heartbeatTimer) this.startHeartbeat(); // 二重に開始しないよう、まだ動いていない時だけ始める
-    if(Game.state.phase==='idle'){
-      // ホスト側：ゲストが参加した瞬間、最初のターンを開始してから同期する
+
+    // 対局の決着を、受け取った側（＝行動していない側）でもきちんと表示する
+    // （行動した側はconcede()等の中で既に表示済みなので、二重に出さないようガードする）
+    if(Game.state.gameOver && !this._gameOverShown){
+      this._gameOverShown = true;
+      if(!document.getElementById('table').classList.contains('open')) UI.showTable();
+      UI.render();
+      if(typeof Tutorial==='undefined' || !Tutorial.active) UI.showGameOver();
+      Game._applyingRemote = false;
+      return;
+    }
+    if(!Game.state.gameOver) this._gameOverShown = false; // 再戦等でgameOverがfalseに戻ったら、次回また表示できるようにする
+
+    // 「最初のターンを始める」処理は、対局の立ち上がり（turnCount===0）の時だけ行う。
+    // ここにガードを入れないと、ホスト自身が送った更新が自分に返ってくるたびに
+    // startTurn()が二重に呼ばれ、山札から余分にカードを引いてしまう不具合につながる
+    // （実際に「相手の手札が増え続ける」不具合として発生していたもの）。
+    if(Game.state.phase==='idle' && Game.state.turnCount===0 && !this._kickoffInProgress){
       if(this.role==='host'){
+        this._kickoffInProgress = true;
         Game._applyingRemote = false;
         UI.showTable();
         Game.addLog(`舞踏会の幕が上がる。両者の山札からそれぞれ1枚が「封印の仮面」として裏向きに除外された。最初の番は「${Game.state.players[Game.state.turnIndex].name}」。`, true);
         UI.render();
         Game.startTurn();
+        setTimeout(()=>{ this._kickoffInProgress = false; }, 2000); // 開始処理が確実に終わった後、ロックを解除する
         return;
       }
     }
@@ -1480,6 +1502,8 @@ const Online = {
     this.role = null;
     this.panelState = 'idle';
     this.errorMsg = '';
+    this._gameOverShown = false;
+    this._kickoffInProgress = false;
   },
 
   // ハートビート：自分がまだこの対局に接続していることを、定期的にFirestoreへ書き込んで伝える。
@@ -2822,6 +2846,10 @@ const UI = {
 
   showGameOver(){
     const s = Game.state;
+    // 自分の操作で決着した場合も、相手の操作で決着した場合も、この時点で「表示済み」としておく。
+    // これにより、オンライン対戦で自分が起こした更新が自分自身に同期で返ってきた際に、
+    // 決着モーダルが二重に表示されるのを防ぐ。
+    if(typeof Online!=='undefined') Online._gameOverShown = true;
     const overlay = document.getElementById('gameover-overlay');
     const box = document.getElementById('gameover-box');
     const myIdx = (typeof s.myIdx==='number') ? s.myIdx : 0;
