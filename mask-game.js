@@ -252,10 +252,10 @@ const BGM = {
   started: false, // ブラウザの自動再生制限のため、最初のユーザー操作後に一度だけ再生を試みる
   enabled: (function(){
     try{
-      if(typeof localStorage==='undefined') return true;
+      if(typeof localStorage==='undefined') return false;
       const v = localStorage.getItem(BGM_KEY);
-      return v===null ? true : v==='1';
-    }catch(e){ return true; }
+      return v===null ? false : v==='1'; // 初期状態（未設定）ではOFFにしておく
+    }catch(e){ return false; }
   })(),
 
   setEnabled(v){
