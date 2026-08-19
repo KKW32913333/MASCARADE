@@ -2032,9 +2032,6 @@ const UI = {
           <input type="text" id="online-code-input" class="online-code-input" placeholder="合言葉" maxlength="6" autocomplete="off" autocapitalize="characters">
           <button class="btn" onclick="Online.startJoin(document.getElementById('online-code-input').value)">参加する</button>
         </div>
-        <div class="online-choice-row" style="margin-top:6px;">
-          <button class="btn ghost" style="font-size:11px;" onclick="Online.runDiagnostics()">接続テストを実行</button>
-        </div>
       `;
     } else if(st==='creating'){
       el.innerHTML = `<div class="online-status-text">部屋を準備しています<span class="online-waiting-dot"></span><span class="online-waiting-dot"></span><span class="online-waiting-dot"></span></div>`;
@@ -2312,9 +2309,9 @@ const UI = {
         msg,
         null, false,
         [
-          { label:'リタイア', action:()=>{ Game.concede(); } },
-          { label:'タイトルに戻る', action:()=>{ UI.forceBackToStart(); } },
           { label:'ゲーム続行', action:()=>{} },
+          { label:'タイトルに戻る', action:()=>{ UI.forceBackToStart(); } },
+          { label:'リタイア', action:()=>{ Game.concede(); } },
         ]
       );
       return;
@@ -2465,7 +2462,7 @@ const UI = {
     const s = Game.state;
     if(!s) return;
     const lines = s.log.map(l=> l.header ? `<div class="lg-turn">${l.text}</div>` : `<div>${l.text}</div>`).join('');
-    panel.innerHTML = `<button class="lg-close" onclick="UI.toggleLog()" aria-label="閉じる"></button>${lines}`;
+    panel.innerHTML = `<button class="lg-handle" onclick="UI.toggleLog()" aria-label="閉じる"></button><button class="lg-close-x" onclick="UI.toggleLog()" aria-label="閉じる">×</button>${lines}`;
     panel.scrollTop = panel.scrollHeight;
   },
 
@@ -2714,7 +2711,7 @@ const UI = {
     clearTimeout(this._stageTimer);
     this._stageTimer = setTimeout(()=>{
       stage.classList.remove('open', `fx-${key}`);
-    }, 950);
+    }, 2000);
   },
 
   // 対戦相手から届いた簡易メッセージを吹き出し風に表示する
@@ -2902,6 +2899,9 @@ const UI = {
         <button class="btn-grand" onclick="UI.restart()">もう一度舞踏会へ</button>
       </div>
       <div class="start-actions" style="margin-top:10px;">
+        <button class="btn ghost" onclick="UI.forceBackToStart()">タイトルに戻る</button>
+      </div>
+      <div class="start-actions" style="margin-top:10px;">
         <button class="btn ghost" onclick="UI.shareResult()">結果を共有</button>
       </div>
     `;
@@ -2970,7 +2970,7 @@ const UI = {
         null, false,
         [
           { label:'はじめる', action:()=>{ Online.rematch(); } },
-          { label:'タイトルへ戻る', action:()=>{ UI.forceBackToStart(); } },
+          { label:'キャンセル', action:()=>{ document.getElementById('gameover-overlay').classList.add('open'); } },
         ]
       );
       return;
@@ -2982,7 +2982,7 @@ const UI = {
       null, false,
       [
         { label:'はじめる', action:()=>{ Game.newGame(); } },
-        { label:'タイトルへ戻る', action:()=>{ UI.forceBackToStart(); } },
+        { label:'キャンセル', action:()=>{ document.getElementById('gameover-overlay').classList.add('open'); } },
       ]
     );
   },
