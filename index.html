@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MASQUERADE ― 仮面領の一夜</title>
 <meta name="description" content="正体を隠したまま王位を競う、一夜限りの仮面舞踏会カードゲーム">
 <meta name="theme-color" content="#1a1428">
@@ -47,7 +47,7 @@
   --danger:#c1495f;
 }
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0; height:100%;}
+html,body{margin:0;padding:0; height:100%; background:#1a1428;}
 body{
   min-height:100dvh;
   background:
@@ -125,8 +125,8 @@ body.table-mode{ overflow:hidden; }
 /* 本編が白ベースになった今も、ここだけは意図的に暗いままにしている
    （劇的な幕開け→明るい舞踏会本編、という演出上の効果を狙っている） */
 #splash-screen{
-  position:fixed; inset:0; z-index:9999;
-  height:100dvh; width:100%;
+  position:fixed; top:0; left:0; right:0; bottom:0; inset:0; z-index:9999;
+  height:100vh; height:100dvh; width:100%; width:100vw;
   display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
   padding:0 24px; overflow:hidden; cursor:pointer;
   background-color:#1a1428;
@@ -200,24 +200,42 @@ body.table-mode{ overflow:hidden; }
   min-height:1.4em; text-shadow:0 1px 6px rgba(0,0,0,0.8);
 }
 /* 「はじめる」ボタン：背景画像2枚目の招待状風ボタンに寄せた、金の二重縁取り＋濃い背景のデザイン */
+/* 「はじめる」ボタンの上にある、フルール・ド・リス付きの飾り罫線（参考画像を再現） */
+.splash-btn-flourish{
+  position:relative; z-index:1; width:100%; max-width:300px;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  opacity:0; transform:translateY(8px); transition:opacity .5s ease .1s, transform .5s ease .1s;
+}
+.splash-btn-flourish.show{ opacity:1; transform:translateY(0); }
+.splash-btn-flourish .fl-line{ flex:1; height:1px; background:linear-gradient(90deg, transparent, #c9a227); }
+.splash-btn-flourish .fl-line.r{ background:linear-gradient(90deg, #c9a227, transparent); }
+.splash-btn-flourish .fl-mark{ font-size:13px; color:#d9ad3f; text-shadow:0 0 8px rgba(217,173,63,0.7); }
+
 .splash-start-btn{
   position:relative; z-index:1;
-  font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif; font-size:16px; letter-spacing:.32em;
-  padding:14px 20px; width:100%; border-radius:6px; cursor:pointer;
-  background:linear-gradient(180deg, rgba(30,20,20,0.92), rgba(15,10,14,0.94));
-  color:#f0d789; border:1px solid rgba(212,175,55,0.75);
-  box-shadow:0 0 0 4px rgba(212,175,55,0.16), 0 10px 26px rgba(0,0,0,0.5), inset 0 0 14px rgba(212,175,55,0.12);
+  font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif; font-size:18px; letter-spacing:.4em;
+  padding:16px 20px; width:100%; max-width:300px; border-radius:999px; cursor:pointer;
+  background:linear-gradient(180deg, #1c1520 0%, #0e0a12 100%);
+  color:#f0d789;
+  border:2px solid #c9a227;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.7),
+    0 0 0 5px rgba(201,162,39,0.14),
+    inset 0 0 0 1px rgba(240,215,137,0.35),
+    inset 0 0 22px rgba(201,162,39,0.18),
+    0 10px 28px rgba(0,0,0,0.55);
   opacity:0; transform:translateY(8px); pointer-events:none;
   transition:opacity .5s ease, transform .5s ease;
 }
 .splash-start-btn::before, .splash-start-btn::after{
-  content:'◆'; font-size:8px; vertical-align:middle; color:#d9ad3f; margin:0 10px; opacity:.85;
+  content:'⚜'; font-size:12px; vertical-align:middle; color:#d9ad3f; margin:0 12px; opacity:.9;
+  text-shadow:0 0 6px rgba(217,173,63,0.8);
 }
 .splash-start-btn.show{ opacity:1; transform:translateY(0); pointer-events:auto; }
 @media (prefers-reduced-motion: reduce){
   #splash-screen{ animation:none; }
   .splash-particle{ display:none; }
-  .splash-start-btn{ transition:opacity .2s ease; }
+  .splash-start-btn, .splash-btn-flourish{ transition:opacity .2s ease; }
 }
 
 #app{position:relative; z-index:1; max-width:760px; margin:0 auto; padding:0 14px 40px; display:flex; flex-direction:column; min-height:100dvh;}
@@ -225,27 +243,27 @@ body.table-mode #app{ height:100dvh; padding-bottom:6px; overflow:hidden; }
 
 /* ---------- header ---------- */
 header.top{
-  text-align:center; padding:16px 10px 10px; position:relative; flex:0 0 auto;
+  text-align:center; padding:calc(16px + env(safe-area-inset-top, 0px)) 10px 10px; position:relative; flex:0 0 auto;
   transition:padding .25s ease;
 }
 .sfx-toggle{
-  position:absolute; top:12px; right:12px; z-index:2;
+  position:absolute; top:calc(12px + env(safe-area-inset-top, 0px)); right:12px; z-index:2;
   background:rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.3); color:var(--ivory);
   width:34px; height:34px; border-radius:50%; font-size:15px; cursor:pointer;
   display:flex; align-items:center; justify-content:center; transition:background .15s ease, opacity .2s ease;
 }
 .sfx-toggle:hover{ background:rgba(212,175,55,0.18); }
 .sfx-toggle.muted{ opacity:.55; }
-header.top.compact .sfx-toggle{ top:6px; right:8px; width:26px; height:26px; font-size:12px; }
+header.top.compact .sfx-toggle{ top:calc(6px + env(safe-area-inset-top, 0px)); right:8px; width:26px; height:26px; font-size:12px; }
 .bgm-toggle{
-  position:absolute; top:12px; right:52px; z-index:2;
+  position:absolute; top:calc(12px + env(safe-area-inset-top, 0px)); right:52px; z-index:2;
   background:rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.3); color:var(--ivory);
   width:34px; height:34px; border-radius:50%; font-size:15px; cursor:pointer;
   display:flex; align-items:center; justify-content:center; transition:background .15s ease, opacity .2s ease;
 }
 .bgm-toggle:hover{ background:rgba(212,175,55,0.18); }
 .bgm-toggle.muted{ opacity:.55; }
-header.top.compact .bgm-toggle{ top:6px; right:38px; width:26px; height:26px; font-size:12px; }
+header.top.compact .bgm-toggle{ top:calc(6px + env(safe-area-inset-top, 0px)); right:38px; width:26px; height:26px; font-size:12px; }
 header.top .eyebrow{
   letter-spacing:.35em; font-size:10px; color:var(--gold); text-transform:uppercase; opacity:0;
   animation:fadeUp .7s ease .05s forwards;
@@ -273,7 +291,7 @@ header.top .divider{
 }
 
 /* 舞踏会画面表示中は「MASQUERADE」のみのコンパクトな見出しにする */
-header.top.compact{ padding:8px 10px 4px; }
+header.top.compact{ padding:calc(8px + env(safe-area-inset-top, 0px)) 10px 4px; }
 header.top.compact .eyebrow,
 header.top.compact .subtitle,
 header.top.compact .divider{ display:none; }
@@ -924,8 +942,8 @@ body.table-mode footer.credits{ display:none; }
   header.top{ padding:5px 10px 3px; }
   header.top .eyebrow, header.top .subtitle, header.top .divider{ display:none; }
   header.top h1{ font-size:19px; margin:0; }
-  .sfx-toggle{ width:24px; height:24px; font-size:11px; top:6px; right:8px; }
-  .bgm-toggle{ width:24px; height:24px; font-size:11px; top:6px; right:36px; }
+  .sfx-toggle{ width:24px; height:24px; font-size:11px; top:calc(6px + env(safe-area-inset-top, 0px)); right:8px; }
+  .bgm-toggle{ width:24px; height:24px; font-size:11px; top:calc(6px + env(safe-area-inset-top, 0px)); right:36px; }
   #start-screen{ padding:2px 6px 6px; }
   .lede{ font-size:12px; line-height:1.5; margin:4px auto 8px; }
   .rules-toggle-wrap{ margin-bottom:4px; }
@@ -982,6 +1000,9 @@ body.table-mode footer.credits{ display:none; }
       <div class="splash-progress-fill" id="splash-progress-fill"></div>
     </div>
     <div class="splash-sub" id="splash-sub"></div>
+    <div class="splash-btn-flourish" id="splash-btn-flourish" aria-hidden="true">
+      <span class="fl-line l"></span><span class="fl-mark">❖</span><span class="fl-line r"></span>
+    </div>
     <button class="splash-start-btn" id="splash-start-btn" onclick="event.stopPropagation(); UI.dismissSplash();">はじめる</button>
   </div>
 </div>

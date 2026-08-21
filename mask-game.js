@@ -1949,6 +1949,7 @@ const UI = {
     const fill = document.getElementById('splash-progress-fill');
     const sub = document.getElementById('splash-sub');
     const startBtn = document.getElementById('splash-start-btn');
+    const flourish = document.getElementById('splash-btn-flourish');
     if(!fill || !sub) return;
     const messages = ['扉の前で支度を整えています', '仮面を選んでいます', '招待状を確かめています', 'さあ、舞踏会へ'];
     let step = 0;
@@ -1967,7 +1968,8 @@ const UI = {
       step++;
       if(step >= messages.length){
         clearInterval(interval);
-        // 支度が整ったら「はじめる」ボタンを表示する
+        // 支度が整ったら、飾り罫線と「はじめる」ボタンを表示する
+        if(flourish) flourish.classList.add('show');
         if(startBtn) startBtn.classList.add('show');
         return;
       }
