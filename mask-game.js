@@ -1947,6 +1947,7 @@ const UI = {
   // 支度が整っていく様子を、進捗バーと言葉の移り変わりで演出する
   runSplashProgress(){
     const fill = document.getElementById('splash-progress-fill');
+    const progress = document.getElementById('splash-progress');
     const sub = document.getElementById('splash-sub');
     const startBtn = document.getElementById('splash-start-btn');
     const flourish = document.getElementById('splash-btn-flourish');
@@ -1968,7 +1969,9 @@ const UI = {
       step++;
       if(step >= messages.length){
         clearInterval(interval);
-        // 支度が整ったら、飾り罫線と「はじめる」ボタンを表示する
+        // 支度が整ったら、進捗バーと文言を消し、飾り罫線と「はじめる」ボタンを表示する
+        if(progress) progress.classList.add('done');
+        if(sub) sub.classList.add('done');
         if(flourish) flourish.classList.add('show');
         if(startBtn) startBtn.classList.add('show');
         return;

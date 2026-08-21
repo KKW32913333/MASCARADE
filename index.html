@@ -188,6 +188,7 @@ body.table-mode{ overflow:hidden; }
 .splash-progress{
   width:min(58vw, 190px); height:4px; border-radius:999px; overflow:hidden;
   background:rgba(255,255,255,0.15); border:1px solid rgba(240,215,137,0.35);
+  transition:opacity .5s ease, transform .5s ease; opacity:1;
 }
 .splash-progress-fill{
   height:100%; width:0%; border-radius:999px;
@@ -195,9 +196,11 @@ body.table-mode{ overflow:hidden; }
   box-shadow:0 0 10px rgba(240,215,137,0.6);
   transition:width 1.6s cubic-bezier(.3,.7,.35,1);
 }
+.splash-progress.done, .splash-sub.done{ opacity:0; transform:translateY(-4px); pointer-events:none; }
 .splash-sub{
   font-size:11.5px; letter-spacing:.14em; color:#e8dfc8; font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
   min-height:1.4em; text-shadow:0 1px 6px rgba(0,0,0,0.8);
+  transition:opacity .5s ease, transform .5s ease; opacity:1;
 }
 /* 「はじめる」ボタン：背景画像2枚目の招待状風ボタンに寄せた、金の二重縁取り＋濃い背景のデザイン */
 /* 「はじめる」ボタンの上にある、フルール・ド・リス付きの飾り罫線（参考画像を再現） */
