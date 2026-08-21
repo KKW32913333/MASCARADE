@@ -261,13 +261,24 @@ const BGM = {
   setEnabled(v){
     this.enabled = !!v;
     try{ if(typeof localStorage!=='undefined') localStorage.setItem(BGM_KEY, v?'1':'0'); }catch(e){}
-    if(this.enabled){ this.tryStart(); } else { this.pause(); }
+    if(this.enabled){
+      // ボタンでの明示的な操作はユーザー操作そのものなので、tryStart()の「初回だけ」ガードは使わず、
+      // 何度でも再生を試みられるようにする（これが無いと、1度OFFにした後は二度と再生されなくなる）。
+      this.started = true;
+      const el = this.getEl();
+      if(el){
+        const p = el.play();
+        if(p && typeof p.catch==='function'){ p.catch(()=>{ this.started = false; }); }
+      }
+    } else {
+      this.pause();
+    }
   },
 
   getEl(){
     if(!this.el && typeof document!=='undefined'){
       this.el = document.getElementById('bgm-audio');
-      if(this.el) this.el.volume = 0.38; // BGMは控えめな音量にしておく（SFXやセリフの邪魔をしないため）
+      if(this.el) this.el.volume = 0.22; // BGMは控えめな音量にしておく（SFXやセリフの邪魔をしないため）
     }
     return this.el;
   },
@@ -298,6 +309,19 @@ const BGM = {
     if(p && typeof p.catch==='function') p.catch(()=>{});
   },
 };
+
+// タブが非表示（バックグラウンド・他のアプリに切り替え等）になっている間はBGMを一時停止し、
+// 画面に戻ってきた時にONの設定であれば再開する。「アプリを開いている間だけ流れる」ようにするための仕組み。
+// ユーザーのON/OFF設定（BGM.enabled）自体は変更しない。
+if(typeof document!=='undefined'){
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){
+      BGM.pause();
+    } else if(BGM.enabled && BGM.started){
+      BGM.resume();
+    }
+  });
+}
 
 /* ---------------------------------------------------------------------
  * 3. ゲーム状態 & コアロジック
@@ -1729,7 +1753,7 @@ const Tutorial = {
       id: 'gameover',
       trigger: (s)=> !!s.gameOver,
       title: '練習対局、終了です',
-      html: 'お疲れ様でした！これでMASQUERADEの基本的な遊び方は身についたはずです。<br><br>タイトル画面に戻って、実際の対局を始めてみましょう。',
+      html: 'お疲れ様でした！これでMASQUERADEの基本的な遊び方は身についたはずです。<br><br>ホーム画面に戻って、実際の対局を始めてみましょう。',
       isLast: true,
     },
   ],
@@ -1778,7 +1802,7 @@ const Tutorial = {
         <button class="btn primary" id="tut-next">${isLastCard ? '練習対局へ進む' : '次へ'}</button>
       </div>
       ${!isLastCard ? `<div class="choice-row"><button class="btn ghost" id="tut-skip">スキップして練習対局へ</button></div>` : ''}
-      <div class="choice-row"><button class="btn ghost" id="tut-cancel" style="font-size:11px;">やめてタイトルへ戻る</button></div>
+      <div class="choice-row"><button class="btn ghost" id="tut-cancel" style="font-size:11px;">やめてホームへ戻る</button></div>
     `;
     overlay.classList.add('open');
     if(index>0){
@@ -1811,7 +1835,7 @@ const Tutorial = {
         this.shownSteps.add(step.id);
         if(step.isLast){
           UI.showInfoModal(step.title, step.html, null, false, [
-            { label:'タイトルへ戻る', action:()=>{ Tutorial.end(); } },
+            { label:'ホームへ戻る', action:()=>{ Tutorial.end(); } },
           ]);
         } else {
           UI.showInfoModal(step.title, step.html, null, true);
@@ -1877,7 +1901,7 @@ const UI = {
     btn.classList.toggle('muted', !BGM.enabled);
   },
 
-  // タイトル画面下部の余白を彩る、装飾用の仮面カード（大公・貴婦人）
+  // ホーム画面下部の余白を彩る、装飾用の仮面カード（大公・貴婦人）
   buildStartDeco(){
     const el = document.getElementById('start-deco');
     if(!el) return;
@@ -2297,6 +2321,23 @@ const UI = {
     document.body.classList.add('table-mode');
     const header = document.getElementById('site-header');
     if(header) header.classList.add('compact');
+    this.buildTableGlints();
+  },
+
+  // 舞踏会画面（対局中）に漂う、金の粒とダイヤ型グリントを生成する
+  buildTableGlints(){
+    const layer = document.getElementById('table-glint-layer');
+    if(!layer) return;
+    let html = '';
+    for(let i=0;i<16;i++){
+      const top = Math.random()*100, left = Math.random()*100, delay = Math.random()*5.5;
+      html += `<div class="table-glint-dot" style="top:${top}%; left:${left}%; animation-delay:${delay}s;"></div>`;
+    }
+    for(let i=0;i<6;i++){
+      const top = Math.random()*100, left = Math.random()*100, delay = Math.random()*4.2;
+      html += `<div class="table-glint-star" style="top:${top}%; left:${left}%; animation-delay:${delay}s;"></div>`;
+    }
+    layer.innerHTML = html;
   },
 
   backToStart(){
@@ -2310,7 +2351,7 @@ const UI = {
         null, false,
         [
           { label:'ゲーム続行', action:()=>{} },
-          { label:'タイトルに戻る', action:()=>{ UI.forceBackToStart(); } },
+          { label:'ホームに戻る', action:()=>{ UI.forceBackToStart(); } },
           { label:'リタイア', action:()=>{ Game.concede(); } },
         ]
       );
@@ -2737,7 +2778,7 @@ const UI = {
   confirmLeaveStale(){
     UI.showInfoModal(
       '対局を終了しますか？',
-      '対戦相手からの反応がありません。対局を終了してタイトルへ戻りますか？',
+      '対戦相手からの反応がありません。対局を終了してホームへ戻りますか？',
       null, false,
       [
         { label:'終了する', action:()=>{ UI.forceBackToStart(); } },
@@ -2756,7 +2797,7 @@ const UI = {
       '対戦相手が退出しました',
       '対戦相手が舞踏会を去りました。この対局は終了します。',
       null, false,
-      [ { label:'タイトルへ戻る', action:()=>{ UI._leftNoticeShown = false; UI.forceBackToStart(); } } ]
+      [ { label:'ホームへ戻る', action:()=>{ UI._leftNoticeShown = false; UI.forceBackToStart(); } } ]
     );
   },
 
@@ -2899,7 +2940,7 @@ const UI = {
         <button class="btn-grand" onclick="UI.restart()">もう一度舞踏会へ</button>
       </div>
       <div class="start-actions" style="margin-top:10px;">
-        <button class="btn ghost" onclick="UI.forceBackToStart()">タイトルに戻る</button>
+        <button class="btn ghost" onclick="UI.forceBackToStart()">ホームに戻る</button>
       </div>
       <div class="start-actions" style="margin-top:10px;">
         <button class="btn ghost" onclick="UI.shareResult()">結果を共有</button>
@@ -2945,7 +2986,7 @@ const UI = {
     }
   },
 
-  // タイトル画面からの開始：いきなり対局が始まらないよう、一度確認を挟む
+  // ホーム画面からの開始：いきなり対局が始まらないよう、一度確認を挟む
   confirmStartGame(){
     BGM.tryStart(); // スプラッシュでの自動再生がブロックされていた場合の保険として、ここでも再試行する
     const diff = DIFFICULTY_DEFS[Game.difficulty] || DIFFICULTY_DEFS.courtier;
