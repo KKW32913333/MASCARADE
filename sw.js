@@ -5,7 +5,7 @@
  * ファイルを更新したら CACHE_NAME のバージョンを必ず上げること
  * （上げ忘れるとブラウザが古いキャッシュを返し続け、「直したはずなのに直っていない」事故につながる）。
  */
-const CACHE_NAME = 'mascarade-cache-v34';
+const CACHE_NAME = 'mascarade-cache-v35';
 
 // カード画像は mask-game.js 内にBase64で埋め込み済みのため、
 // 個別のcards/以下の画像はプリキャッシュ対象に含めない
@@ -25,6 +25,7 @@ const PRECACHE_URLS = [
   './apple-touch-icon.png',
   './bgm.mp3',
   './bgm.ogg',
+  './splash-bg.jpg',
 ];
 
 self.addEventListener('install', (event) => {
