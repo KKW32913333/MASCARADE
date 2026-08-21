@@ -278,7 +278,7 @@ const BGM = {
   getEl(){
     if(!this.el && typeof document!=='undefined'){
       this.el = document.getElementById('bgm-audio');
-      if(this.el) this.el.volume = 0.22; // BGMは控えめな音量にしておく（SFXやセリフの邪魔をしないため）
+      if(this.el) this.el.volume = 0.12; // BGMは控えめな音量にしておく（SFXやセリフの邪魔をしないため）
     }
     return this.el;
   },
