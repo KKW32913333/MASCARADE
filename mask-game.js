@@ -1739,7 +1739,7 @@ const Tutorial = {
     },
     {
       id: 'resolve',
-      trigger: (s)=> s.phase==='resolve' && !!s.pendingCard,
+      trigger: (s)=> s.phase==='resolve' && !!s.pendingCard && !s.players[s.turnIndex].isCPU,
       title: '仮面の効果が発動します',
       html: '場に出した仮面の効果です。相手を対象にする効果は、「発動する」ボタンを押すと実際に発動します。<br><br>効果で得た情報（相手の手札の範囲や正体など）は、次以降の駆け引きに活かしましょう。',
     },
@@ -1828,6 +1828,13 @@ const Tutorial = {
 
   checkSteps(){
     if(!this.active || !Game.state) return;
+    // 既に情報モーダル（#info-overlay）が開いている場合は、今回は何もしない。
+    // ここでヒントを表示してしまうと、既に開いているモーダル（ゲーム自身の効果結果など）の
+    // ボタンに紐づいた処理（eliminate/finishResolve等でターンを進める処理）が
+    // 丸ごと上書きされて失われてしまい、対局がそのフェーズのまま進まなくなる不具合があった。
+    // モーダルが閉じてから、次のrender()で改めて判定する。
+    const overlay = document.getElementById('info-overlay');
+    if(overlay && overlay.classList.contains('open')) return;
     const s = Game.state;
     for(const step of this.steps){
       if(this.shownSteps.has(step.id)) continue;
@@ -1947,7 +1954,7 @@ const UI = {
   // 支度が整っていく様子を、進捗バーと言葉の移り変わりで演出する
   runSplashProgress(){
     const fill = document.getElementById('splash-progress-fill');
-    const progress = document.getElementById('splash-progress');
+    const loadingState = document.getElementById('splash-loading-state');
     const sub = document.getElementById('splash-sub');
     const startBtn = document.getElementById('splash-start-btn');
     const flourish = document.getElementById('splash-btn-flourish');
@@ -1969,9 +1976,9 @@ const UI = {
       step++;
       if(step >= messages.length){
         clearInterval(interval);
-        // 支度が整ったら、進捗バーと文言を消し、飾り罫線と「はじめる」ボタンを表示する
-        if(progress) progress.classList.add('done');
-        if(sub) sub.classList.add('done');
+        // 支度が整ったら、読み込み表示（進捗バー・文言）を消し、同じ場所に
+        // 飾り罫線と「はじめる」ボタンを重ねて表示する
+        if(loadingState) loadingState.classList.add('done');
         if(flourish) flourish.classList.add('show');
         if(startBtn) startBtn.classList.add('show');
         return;
